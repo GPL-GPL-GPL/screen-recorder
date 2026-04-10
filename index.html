@@ -80,6 +80,9 @@
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s, opacity 0.2s;
+            user-select: none;
+            -webkit-user-select: none;
+            outline: none;
         }
 
         button:disabled {
@@ -178,51 +181,6 @@
             background: #000;
         }
 
-        .converting-status {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .converting-status.visible {
-            display: flex;
-        }
-
-        .spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid #333;
-            border-top-color: #dc3545;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .converting-text {
-            font-size: 14px;
-            color: #aaa;
-        }
-
-        .progress-bar-container {
-            width: 300px;
-            height: 6px;
-            background: #333;
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background: #dc3545;
-            width: 0%;
-            transition: width 0.3s;
-        }
-
         .error-message {
             color: #dc3545;
             font-size: 14px;
@@ -237,7 +195,7 @@
 </head>
 <body>
     <h1>Screen Recorder</h1>
-    <p class="subtitle">Record your screen and download as MP4</p>
+    <p class="subtitle">Record your screen and download as WebM</p>
 
     <div class="controls">
         <div class="audio-toggles">
@@ -255,21 +213,13 @@
         </div>
 
         <div class="btn-row">
-            <button class="btn-record" id="btnRecord">Start Recording</button>
-            <button class="btn-pause" id="btnPause" disabled>Pause</button>
-            <button class="btn-stop" id="btnStop" disabled>Stop</button>
+            <button type="button" class="btn-record" id="btnRecord">Start Recording</button>
+            <button type="button" class="btn-pause" id="btnPause" disabled>Pause</button>
+            <button type="button" class="btn-stop" id="btnStop" disabled>Stop</button>
         </div>
 
         <div class="btn-row">
-            <button class="btn-download" id="btnDownload" disabled>Download MP4</button>
-        </div>
-
-        <div class="converting-status" id="convertingStatus">
-            <div class="spinner"></div>
-            <span class="converting-text" id="convertingText">Converting to MP4...</span>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar"></div>
-            </div>
+            <button type="button" class="btn-download" id="btnDownload" disabled>Download Recording</button>
         </div>
 
         <div class="error-message" id="errorMessage"></div>
@@ -280,8 +230,6 @@
         <video id="previewVideo" controls></video>
     </div>
 
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/util.js"></script>
     <script>
         const btnRecord = document.getElementById('btnRecord');
         const btnPause = document.getElementById('btnPause');
@@ -292,24 +240,16 @@
         const recordingStatus = document.getElementById('recordingStatus');
         const previewSection = document.getElementById('previewSection');
         const previewVideo = document.getElementById('previewVideo');
-        const convertingStatus = document.getElementById('convertingStatus');
-        const convertingText = document.getElementById('convertingText');
-        const progressBar = document.getElementById('progressBar');
         const errorMessage = document.getElementById('errorMessage');
 
         let mediaRecorder = null;
         let recordedChunks = [];
-        let mp4Blob = null;
+        let recordingBlob = null;
         let timerInterval = null;
         let elapsedSeconds = 0;
         let screenStream = null;
         let micStream = null;
         let combinedStream = null;
-        let ffmpegLoaded = false;
-
-        const { FFmpeg } = FFmpegWASM;
-        const { fetchFile } = FFmpegUtil;
-        const ffmpeg = new FFmpeg();
 
         function showError(msg) {
             errorMessage.textContent = msg;
@@ -330,7 +270,7 @@
 
         function startTimer() {
             elapsedSeconds = 0;
-            timerInterval = setInterval(() => {
+            timerInterval = setInterval(function() {
                 elapsedSeconds++;
                 const timerEl = document.querySelector('.timer');
                 if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
@@ -352,13 +292,12 @@
                 systemAudioCheckbox.disabled = true;
                 micAudioCheckbox.disabled = true;
                 previewSection.classList.remove('visible');
-                convertingStatus.classList.remove('visible');
             } else if (state === 'paused') {
-                const dot = document.querySelector('.red-dot');
+                var dot = document.querySelector('.red-dot');
                 if (dot) dot.classList.add('paused-indicator');
                 btnPause.textContent = 'Resume';
             } else if (state === 'resumed') {
-                const dot = document.querySelector('.red-dot');
+                var dot = document.querySelector('.red-dot');
                 if (dot) dot.classList.remove('paused-indicator');
                 btnPause.textContent = 'Pause';
             } else if (state === 'stopped') {
@@ -372,76 +311,82 @@
             }
         }
 
-        async function startRecording() {
+        function startRecording() {
             clearError();
             recordedChunks = [];
-            mp4Blob = null;
+            recordingBlob = null;
 
-            try {
-                const displayMediaOptions = {
-                    video: { cursor: "always" },
-                    audio: systemAudioCheckbox.checked
-                };
-                screenStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
-            } catch (err) {
+            var displayMediaOptions = {
+                video: { cursor: "always" },
+                audio: systemAudioCheckbox.checked
+            };
+
+            navigator.mediaDevices.getDisplayMedia(displayMediaOptions).then(function(stream) {
+                screenStream = stream;
+                var tracks = [];
+                for (var i = 0; i < stream.getTracks().length; i++) {
+                    tracks.push(stream.getTracks()[i]);
+                }
+
+                if (micAudioCheckbox.checked) {
+                    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(mic) {
+                        micStream = mic;
+                        var micTracks = mic.getAudioTracks();
+                        for (var j = 0; j < micTracks.length; j++) {
+                            tracks.push(micTracks[j]);
+                        }
+                        beginRecording(tracks);
+                    }).catch(function(err) {
+                        console.warn('Microphone access denied, continuing without mic:', err);
+                        beginRecording(tracks);
+                    });
+                } else {
+                    beginRecording(tracks);
+                }
+            }).catch(function(err) {
                 if (err.name === 'NotAllowedError') {
                     showError('Screen sharing was cancelled.');
                 } else {
                     showError('Failed to access screen: ' + err.message);
                 }
                 console.error('getDisplayMedia error:', err);
-                return;
-            }
+            });
+        }
 
-            let tracks = [...screenStream.getTracks()];
-
-            if (micAudioCheckbox.checked) {
-                try {
-                    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    tracks.push(...micStream.getAudioTracks());
-                } catch (err) {
-                    console.warn('Microphone access denied, continuing without mic:', err);
-                }
-            }
-
+        function beginRecording(tracks) {
             combinedStream = new MediaStream(tracks);
 
-            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
                 ? 'video/webm;codecs=vp9,opus'
                 : 'video/webm';
 
-            mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+            mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType });
 
-            mediaRecorder.ondataavailable = (event) => {
+            mediaRecorder.ondataavailable = function(event) {
                 if (event.data.size > 0) {
                     recordedChunks.push(event.data);
                 }
             };
 
-            mediaRecorder.onstop = async () => {
+            mediaRecorder.onstop = function() {
                 stopTimer();
                 setRecordingUI('stopped');
                 stopAllStreams();
 
-                const webmBlob = new Blob(recordedChunks, { type: 'video/webm' });
-
-                // Show preview immediately with webm
-                const previewUrl = URL.createObjectURL(webmBlob);
+                recordingBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                var previewUrl = URL.createObjectURL(recordingBlob);
                 previewVideo.src = previewUrl;
                 previewSection.classList.add('visible');
-
-                // Convert to MP4
-                await convertToMp4(webmBlob);
+                btnDownload.disabled = false;
             };
 
-            // Stop recording if user stops screen share via browser UI
-            screenStream.getVideoTracks()[0].onended = () => {
+            screenStream.getVideoTracks()[0].onended = function() {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
             };
 
-            mediaRecorder.start(1000); // collect data every second
+            mediaRecorder.start(1000);
             setRecordingUI('recording');
             startTimer();
         }
@@ -455,9 +400,9 @@
                 setRecordingUI('paused');
             } else if (mediaRecorder.state === 'paused') {
                 mediaRecorder.resume();
-                timerInterval = setInterval(() => {
+                timerInterval = setInterval(function() {
                     elapsedSeconds++;
-                    const timerEl = document.querySelector('.timer');
+                    var timerEl = document.querySelector('.timer');
                     if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
                 }, 1000);
                 setRecordingUI('resumed');
@@ -472,92 +417,24 @@
 
         function stopAllStreams() {
             if (screenStream) {
-                screenStream.getTracks().forEach(t => t.stop());
+                screenStream.getTracks().forEach(function(t) { t.stop(); });
                 screenStream = null;
             }
             if (micStream) {
-                micStream.getTracks().forEach(t => t.stop());
+                micStream.getTracks().forEach(function(t) { t.stop(); });
                 micStream = null;
             }
             combinedStream = null;
         }
 
-        async function convertToMp4(webmBlob) {
-            convertingStatus.classList.add('visible');
-            convertingText.textContent = 'Loading converter...';
-            progressBar.style.width = '0%';
-
-            try {
-                if (!ffmpegLoaded) {
-                    ffmpeg.on('log', ({ message }) => {
-                        console.log('[ffmpeg]', message);
-                    });
-
-                    ffmpeg.on('progress', ({ progress }) => {
-                        const pct = Math.round(progress * 100);
-                        progressBar.style.width = pct + '%';
-                        convertingText.textContent = `Converting to MP4... ${pct}%`;
-                    });
-
-                    await ffmpeg.load({
-                        coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-                        wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
-                    });
-                    ffmpegLoaded = true;
-                }
-
-                convertingText.textContent = 'Converting to MP4...';
-                progressBar.style.width = '0%';
-
-                const webmData = await fetchFile(webmBlob);
-                await ffmpeg.writeFile('input.webm', webmData);
-
-                await ffmpeg.exec([
-                    '-i', 'input.webm',
-                    '-c:v', 'libx264',
-                    '-preset', 'fast',
-                    '-crf', '23',
-                    '-c:a', 'aac',
-                    '-b:a', '128k',
-                    '-movflags', '+faststart',
-                    'output.mp4'
-                ]);
-
-                const mp4Data = await ffmpeg.readFile('output.mp4');
-                mp4Blob = new Blob([mp4Data.buffer], { type: 'video/mp4' });
-
-                // Update preview to use mp4
-                const mp4Url = URL.createObjectURL(mp4Blob);
-                previewVideo.src = mp4Url;
-
-                convertingStatus.classList.remove('visible');
-                btnDownload.disabled = false;
-
-                // Clean up ffmpeg files
-                await ffmpeg.deleteFile('input.webm');
-                await ffmpeg.deleteFile('output.mp4');
-
-            } catch (err) {
-                console.error('FFmpeg conversion failed:', err);
-                convertingStatus.classList.remove('visible');
-                showError('MP4 conversion failed. You can still preview the recording above.');
-
-                // Fall back to webm download
-                mp4Blob = new Blob(recordedChunks, { type: 'video/webm' });
-                btnDownload.disabled = false;
-                btnDownload.textContent = 'Download WebM';
-            }
-        }
-
         function downloadRecording() {
-            if (!mp4Blob) return;
+            if (!recordingBlob) return;
 
-            const ext = mp4Blob.type === 'video/mp4' ? 'mp4' : 'webm';
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            const filename = `recording-${timestamp}.${ext}`;
+            var timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            var filename = 'recording-' + timestamp + '.webm';
 
-            const url = URL.createObjectURL(mp4Blob);
-            const a = document.createElement('a');
+            var url = URL.createObjectURL(recordingBlob);
+            var a = document.createElement('a');
             a.href = url;
             a.download = filename;
             document.body.appendChild(a);
@@ -566,10 +443,10 @@
             URL.revokeObjectURL(url);
         }
 
-        btnRecord.addEventListener('click', startRecording);
-        btnPause.addEventListener('click', pauseRecording);
-        btnStop.addEventListener('click', stopRecording);
-        btnDownload.addEventListener('click', downloadRecording);
+        btnRecord.onclick = startRecording;
+        btnPause.onclick = pauseRecording;
+        btnStop.onclick = stopRecording;
+        btnDownload.onclick = downloadRecording;
     </script>
 </body>
 </html>
