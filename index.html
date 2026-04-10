@@ -195,7 +195,7 @@
 </head>
 <body>
     <h1>Screen Recorder</h1>
-    <p class="subtitle">Record your screen and download as WebM</p>
+    <p class="subtitle">Record your screen and download as MP4</p>
 
     <div class="controls">
         <div class="audio-toggles">
@@ -245,6 +245,7 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let recordingBlob = null;
+        let recordingMimeType = 'video/webm';
         let timerInterval = null;
         let elapsedSeconds = 0;
         let screenStream = null;
@@ -356,9 +357,18 @@
         function beginRecording(tracks) {
             combinedStream = new MediaStream(tracks);
 
-            var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-                ? 'video/webm;codecs=vp9,opus'
-                : 'video/webm';
+            var mimeType;
+            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,opus')) {
+                mimeType = 'video/mp4;codecs=avc1,opus';
+            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                mimeType = 'video/mp4';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+                mimeType = 'video/webm;codecs=vp9,opus';
+            } else {
+                mimeType = 'video/webm';
+            }
+            recordingMimeType = mimeType;
+            console.log('Recording with mime type:', mimeType);
 
             mediaRecorder = new MediaRecorder(combinedStream, { mimeType: mimeType });
 
@@ -373,7 +383,7 @@
                 setRecordingUI('stopped');
                 stopAllStreams();
 
-                recordingBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                recordingBlob = new Blob(recordedChunks, { type: recordingMimeType });
                 var previewUrl = URL.createObjectURL(recordingBlob);
                 previewVideo.src = previewUrl;
                 previewSection.classList.add('visible');
@@ -430,8 +440,9 @@
         function downloadRecording() {
             if (!recordingBlob) return;
 
+            var ext = recordingMimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             var timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            var filename = 'recording-' + timestamp + '.webm';
+            var filename = 'recording-' + timestamp + '.' + ext;
 
             var url = URL.createObjectURL(recordingBlob);
             var a = document.createElement('a');
