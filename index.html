@@ -48,6 +48,8 @@
             display: flex;
             gap: 24px;
             margin-bottom: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
         }
 
         .toggle-label {
@@ -191,6 +193,104 @@
         .error-message.visible {
             display: block;
         }
+
+        /* Floating, draggable, resizable webcam panel */
+        .webcam-panel {
+            display: none;
+            position: fixed;
+            top: 100px;
+            right: 40px;
+            width: 260px;
+            background: #1a1a1a;
+            border: 2px solid #2a2a2a;
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            user-select: none;
+        }
+
+        .webcam-panel.visible {
+            display: block;
+        }
+
+        .webcam-drag-bar {
+            background: #222;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #aaa;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .webcam-drag-bar .pip-btn {
+            background: #444;
+            color: #eee;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .webcam-drag-bar .pip-btn:hover {
+            background: #555;
+        }
+
+        .webcam-panel video {
+            display: block;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            border-radius: 0;
+            transform: scaleX(-1); /* mirror preview only */
+            pointer-events: none;
+        }
+
+        .webcam-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 18px;
+            height: 18px;
+            cursor: se-resize;
+            background:
+                linear-gradient(135deg,
+                    transparent 0%, transparent 55%,
+                    #666 55%, #666 65%,
+                    transparent 65%, transparent 75%,
+                    #666 75%, #666 85%,
+                    transparent 85%, transparent 95%,
+                    #666 95%);
+        }
+
+        .webcam-panel.pip-active video {
+            opacity: 0.15;
+        }
+
+        .webcam-panel.pip-active .pip-placeholder {
+            display: block;
+        }
+
+        .pip-placeholder {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            color: #ccc;
+            background: rgba(0,0,0,0.55);
+            padding: 6px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -206,6 +306,10 @@
             <label class="toggle-label">
                 <input type="checkbox" id="micAudio">
                 Microphone
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="webcamOverlay">
+                Webcam overlay
             </label>
         </div>
 
@@ -225,6 +329,16 @@
         <div class="error-message" id="errorMessage"></div>
     </div>
 
+    <div class="webcam-panel" id="webcamPanel">
+        <div class="webcam-drag-bar" id="webcamDragBar">
+            <span>Webcam &mdash; drag to move</span>
+            <button type="button" class="pip-btn" id="btnTogglePip">Pop out</button>
+        </div>
+        <video id="webcamVideo" autoplay muted playsinline></video>
+        <div class="pip-placeholder">Floating in Picture-in-Picture</div>
+        <div class="webcam-resize-handle" id="webcamResizeHandle"></div>
+    </div>
+
     <div class="preview-section" id="previewSection">
         <h2>Preview</h2>
         <video id="previewVideo" controls></video>
@@ -237,10 +351,17 @@
         const btnDownload = document.getElementById('btnDownload');
         const systemAudioCheckbox = document.getElementById('systemAudio');
         const micAudioCheckbox = document.getElementById('micAudio');
+        const webcamOverlayCheckbox = document.getElementById('webcamOverlay');
         const recordingStatus = document.getElementById('recordingStatus');
         const previewSection = document.getElementById('previewSection');
         const previewVideo = document.getElementById('previewVideo');
         const errorMessage = document.getElementById('errorMessage');
+
+        const webcamPanel = document.getElementById('webcamPanel');
+        const webcamVideo = document.getElementById('webcamVideo');
+        const webcamDragBar = document.getElementById('webcamDragBar');
+        const webcamResizeHandle = document.getElementById('webcamResizeHandle');
+        const btnTogglePip = document.getElementById('btnTogglePip');
 
         let mediaRecorder = null;
         let recordedChunks = [];
@@ -250,7 +371,10 @@
         let elapsedSeconds = 0;
         let screenStream = null;
         let micStream = null;
+        let webcamStream = null;
         let combinedStream = null;
+        let audioCtx = null;
+        let audioDest = null;
 
         function showError(msg) {
             errorMessage.textContent = msg;
@@ -292,6 +416,7 @@
                 btnDownload.disabled = true;
                 systemAudioCheckbox.disabled = true;
                 micAudioCheckbox.disabled = true;
+                webcamOverlayCheckbox.disabled = true;
                 previewSection.classList.remove('visible');
             } else if (state === 'paused') {
                 var dot = document.querySelector('.red-dot');
@@ -309,8 +434,127 @@
                 btnStop.disabled = true;
                 systemAudioCheckbox.disabled = false;
                 micAudioCheckbox.disabled = false;
+                webcamOverlayCheckbox.disabled = false;
             }
         }
+
+        // ---------- Webcam overlay ----------
+
+        function setupWebcam() {
+            return navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 } }
+            }).then(function(stream) {
+                webcamStream = stream;
+                webcamVideo.srcObject = stream;
+                webcamPanel.classList.add('visible');
+                return webcamVideo.play().catch(function() {});
+            }).then(function() {
+                // Auto-request Picture-in-Picture so the webcam floats over every app.
+                // Falls back to the in-page draggable panel if PiP is unavailable or
+                // the transient user activation already expired during the screen picker.
+                if (document.pictureInPictureEnabled && !webcamVideo.disablePictureInPicture) {
+                    return webcamVideo.requestPictureInPicture().catch(function(err) {
+                        console.warn('Auto Picture-in-Picture failed; use the Pop out button:', err);
+                    });
+                }
+            }).catch(function(err) {
+                console.warn('Webcam access failed:', err);
+                showError('Webcam access denied: ' + err.message);
+                webcamStream = null;
+            });
+        }
+
+        function teardownWebcam() {
+            if (document.pictureInPictureElement === webcamVideo) {
+                document.exitPictureInPicture().catch(function() {});
+            }
+            webcamPanel.classList.remove('visible');
+            webcamPanel.classList.remove('pip-active');
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(function(t) { t.stop(); });
+                webcamStream = null;
+            }
+            webcamVideo.srcObject = null;
+        }
+
+        webcamVideo.addEventListener('enterpictureinpicture', function() {
+            webcamPanel.classList.add('pip-active');
+            btnTogglePip.textContent = 'Bring back';
+        });
+
+        webcamVideo.addEventListener('leavepictureinpicture', function() {
+            webcamPanel.classList.remove('pip-active');
+            btnTogglePip.textContent = 'Pop out';
+        });
+
+        btnTogglePip.onclick = function() {
+            if (!webcamStream) return;
+            if (document.pictureInPictureElement === webcamVideo) {
+                document.exitPictureInPicture().catch(function(err) {
+                    console.warn('exitPictureInPicture failed:', err);
+                });
+            } else {
+                webcamVideo.requestPictureInPicture().catch(function(err) {
+                    showError('Picture-in-Picture failed: ' + err.message);
+                });
+            }
+        };
+
+        // Drag the in-page panel by its title bar
+        (function enableDragging() {
+            let dragging = false;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            webcamDragBar.addEventListener('mousedown', function(e) {
+                if (e.target.tagName === 'BUTTON') return;
+                dragging = true;
+                const rect = webcamPanel.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!dragging) return;
+                const newLeft = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - offsetX));
+                const newTop = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
+                webcamPanel.style.left = newLeft + 'px';
+                webcamPanel.style.top = newTop + 'px';
+                webcamPanel.style.right = 'auto';
+            });
+
+            document.addEventListener('mouseup', function() {
+                dragging = false;
+            });
+        })();
+
+        // Resize via the bottom-right handle (height stays via aspect-ratio)
+        (function enableResizing() {
+            let resizing = false;
+            let startWidth = 0;
+            let startX = 0;
+
+            webcamResizeHandle.addEventListener('mousedown', function(e) {
+                resizing = true;
+                startWidth = webcamPanel.getBoundingClientRect().width;
+                startX = e.clientX;
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            document.addEventListener('mousemove', function(e) {
+                if (!resizing) return;
+                const newWidth = Math.max(160, Math.min(720, startWidth + (e.clientX - startX)));
+                webcamPanel.style.width = newWidth + 'px';
+            });
+
+            document.addEventListener('mouseup', function() {
+                resizing = false;
+            });
+        })();
+
+        // ---------- Recording flow ----------
 
         function startRecording() {
             clearError();
@@ -324,26 +568,25 @@
 
             navigator.mediaDevices.getDisplayMedia(displayMediaOptions).then(function(stream) {
                 screenStream = stream;
-                var tracks = [];
-                for (var i = 0; i < stream.getTracks().length; i++) {
-                    tracks.push(stream.getTracks()[i]);
-                }
+
+                var pending = [];
 
                 if (micAudioCheckbox.checked) {
-                    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(mic) {
-                        micStream = mic;
-                        var micTracks = mic.getAudioTracks();
-                        for (var j = 0; j < micTracks.length; j++) {
-                            tracks.push(micTracks[j]);
-                        }
-                        beginRecording(tracks);
-                    }).catch(function(err) {
-                        console.warn('Microphone access denied, continuing without mic:', err);
-                        beginRecording(tracks);
-                    });
-                } else {
-                    beginRecording(tracks);
+                    pending.push(
+                        navigator.mediaDevices.getUserMedia({ audio: true })
+                            .then(function(mic) { micStream = mic; })
+                            .catch(function(err) {
+                                console.warn('Microphone access denied:', err);
+                                micStream = null;
+                            })
+                    );
                 }
+
+                if (webcamOverlayCheckbox.checked) {
+                    pending.push(setupWebcam());
+                }
+
+                return Promise.all(pending).then(beginRecording);
             }).catch(function(err) {
                 if (err.name === 'NotAllowedError') {
                     showError('Screen sharing was cancelled.');
@@ -351,10 +594,40 @@
                     showError('Failed to access screen: ' + err.message);
                 }
                 console.error('getDisplayMedia error:', err);
+                stopAllStreams();
             });
         }
 
-        function beginRecording(tracks) {
+        // MediaRecorder only encodes the first audio track of its source stream,
+        // so when we have BOTH system audio and mic we mix them via WebAudio into
+        // a single track before handing it to MediaRecorder.
+        function buildMixedAudioTrack() {
+            var screenAudio = screenStream ? screenStream.getAudioTracks() : [];
+            var micAudio = micStream ? micStream.getAudioTracks() : [];
+
+            var sources = [];
+            if (screenAudio.length > 0) sources.push(screenStream);
+            if (micAudio.length > 0) sources.push(micStream);
+
+            if (sources.length === 0) return null;
+            if (sources.length === 1) return sources[0].getAudioTracks()[0];
+
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioDest = audioCtx.createMediaStreamDestination();
+            sources.forEach(function(s) {
+                audioCtx.createMediaStreamSource(s).connect(audioDest);
+            });
+            return audioDest.stream.getAudioTracks()[0];
+        }
+
+        function beginRecording() {
+            var tracks = [];
+            var videoTrack = screenStream.getVideoTracks()[0];
+            tracks.push(videoTrack);
+
+            var mixedAudio = buildMixedAudioTrack();
+            if (mixedAudio) tracks.push(mixedAudio);
+
             combinedStream = new MediaStream(tracks);
 
             var mimeType;
@@ -390,7 +663,7 @@
                 btnDownload.disabled = false;
             };
 
-            screenStream.getVideoTracks()[0].onended = function() {
+            videoTrack.onended = function() {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                 }
@@ -433,6 +706,12 @@
             if (micStream) {
                 micStream.getTracks().forEach(function(t) { t.stop(); });
                 micStream = null;
+            }
+            teardownWebcam();
+            if (audioCtx) {
+                audioCtx.close().catch(function() {});
+                audioCtx = null;
+                audioDest = null;
             }
             combinedStream = null;
         }
