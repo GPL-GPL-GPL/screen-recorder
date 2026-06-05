@@ -1,0 +1,2035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gabes screen recorder - test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .audio-toggles {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #ccc;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toggle-label input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #dc3545;
+            cursor: pointer;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+            user-select: none;
+            -webkit-user-select: none;
+            outline: none;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-record { background: #dc3545; color: #fff; }
+        .btn-record:hover:not(:disabled) { background: #c82333; }
+
+        .btn-pause { background: #ffc107; color: #000; }
+        .btn-pause:hover:not(:disabled) { background: #e0a800; }
+
+        .btn-stop { background: #555; color: #fff; }
+        .btn-stop:hover:not(:disabled) { background: #444; }
+
+        .btn-download { background: #28a745; color: #fff; }
+        .btn-download:hover:not(:disabled) { background: #218838; }
+
+        .recording-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            height: 28px;
+        }
+
+        .red-dot {
+            width: 12px;
+            height: 12px;
+            background: #dc3545;
+            border-radius: 50%;
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .paused-indicator {
+            animation: none;
+            background: #ffc107;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .timer {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .preview-section {
+            margin-top: 32px;
+            width: 100%;
+            max-width: 900px;
+            display: none;
+        }
+
+        .preview-section.visible {
+            display: block;
+        }
+
+        .preview-section h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: #ccc;
+        }
+
+        .preview-wrapper {
+            position: relative;
+            width: 100%;
+            line-height: 0; /* prevent video bottom gap */
+        }
+
+        .preview-wrapper video {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+            display: block;
+        }
+
+        #annotationCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        #annotationCanvas.tool-active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 8px;
+            display: none;
+        }
+
+        .error-message.visible {
+            display: block;
+        }
+
+        /* Floating, draggable, resizable webcam panel */
+        .webcam-panel {
+            display: none;
+            position: fixed;
+            top: 100px;
+            right: 40px;
+            width: 260px;
+            background: #1a1a1a;
+            border: 2px solid #2a2a2a;
+            border-radius: 12px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            user-select: none;
+            touch-action: none;
+        }
+
+        .webcam-panel.visible { display: block; }
+
+        .webcam-drag-bar {
+            background: #222;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #aaa;
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .webcam-drag-bar .pip-btn {
+            background: #444;
+            color: #eee;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .webcam-drag-bar .pip-btn:hover { background: #555; }
+
+        .webcam-panel video {
+            display: block;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #000;
+            border-radius: 0;
+            transform: scaleX(-1); /* mirror preview only */
+            pointer-events: none;
+        }
+
+        .webcam-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 18px;
+            height: 18px;
+            cursor: se-resize;
+            background:
+                linear-gradient(135deg,
+                    transparent 0%, transparent 55%,
+                    #666 55%, #666 65%,
+                    transparent 65%, transparent 75%,
+                    #666 75%, #666 85%,
+                    transparent 85%, transparent 95%,
+                    #666 95%);
+        }
+
+        .webcam-panel.pip-active video { opacity: 0.15; }
+        .webcam-panel.pip-active .pip-placeholder { display: block; }
+
+        .pip-placeholder {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            color: #ccc;
+            background: rgba(0,0,0,0.55);
+            padding: 6px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Editor toolbar */
+        .editor-toolbar {
+            display: none;
+            margin-top: 12px;
+            margin-bottom: 12px;
+            width: 100%;
+            background: #181818;
+            border: 1px solid #2a2a2a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .editor-toolbar.visible { display: flex; }
+
+        .tool-group {
+            display: flex;
+            gap: 4px;
+            padding-right: 10px;
+            margin-right: 2px;
+            border-right: 1px solid #2a2a2a;
+            align-items: center;
+        }
+
+        .tool-group:last-child {
+            border-right: none;
+            padding-right: 0;
+            margin-right: 0;
+            flex: 1;
+            justify-content: flex-end;
+        }
+
+        .tool-btn {
+            padding: 6px 12px;
+            background: #2a2a2a;
+            color: #ccc;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .tool-btn:hover { background: #333; }
+
+        .tool-btn.active {
+            background: #dc3545;
+            color: #fff;
+            border-color: #dc3545;
+        }
+
+        .tool-btn.primary {
+            background: #28a745;
+            color: #fff;
+        }
+
+        .tool-btn.primary:hover:not(:disabled) { background: #218838; }
+        .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .color-swatch.active {
+            border-color: #fff;
+            transform: scale(1.05);
+        }
+
+        .duration-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #aaa;
+            font-size: 12px;
+            cursor: default;
+        }
+
+        .duration-control input[type="range"] { width: 90px; }
+        .duration-value {
+            min-width: 32px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            color: #ddd;
+        }
+
+        .text-editor-pop {
+            position: absolute;
+            display: none;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 6px 8px;
+            z-index: 100;
+        }
+
+        .text-editor-pop.visible { display: block; }
+
+        .text-editor-pop input {
+            background: transparent;
+            color: #fff;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            min-width: 180px;
+            font-family: inherit;
+        }
+
+        .export-status {
+            color: #aaa;
+            font-size: 12px;
+            margin-left: 8px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            min-width: 110px;
+            text-align: right;
+        }
+
+        /* Floating, draggable transcription panel - Chrome Live Caption aesthetic */
+        .transcription-panel {
+            display: none;
+            position: fixed;
+            top: 100px;
+            left: 40px;
+            width: 360px;
+            max-width: calc(100vw - 80px);
+            background: rgba(0, 0, 0, 0.88);
+            border-radius: 16px;
+            overflow: hidden;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            user-select: none;
+            touch-action: none;
+        }
+
+        .transcription-panel.visible { display: flex; flex-direction: column; }
+
+        .transcription-drag-bar {
+            position: relative;
+            height: 18px;
+            cursor: move;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Drag affordance - subtle grip */
+        .transcription-drag-bar::before {
+            content: '';
+            width: 32px;
+            height: 3px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .transcription-live-dot {
+            position: absolute;
+            top: 7px;
+            right: 10px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff3b30;
+            animation: pulse 1.4s ease-in-out infinite;
+        }
+
+        .transcript-body {
+            padding: 6px 18px 14px;
+            max-height: 110px;
+            overflow: hidden;
+            font-size: 17px;
+            font-weight: 400;
+            line-height: 1.55;
+            color: #fff;
+            word-break: break-word;
+            scroll-behavior: smooth;
+        }
+
+        .transcript-word {
+            display: inline;
+            opacity: 0;
+            transition: opacity 0.12s ease;
+        }
+
+        .transcript-word.visible { opacity: 1; }
+        .transcript-word.interim { opacity: 0.45; }
+
+        /* Annotations are disabled for this build. */
+        .editor-toolbar,
+        #annotationCanvas,
+        .text-editor-pop {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>gabes screen recorder - test</h1>
+    <p class="subtitle">Record your screen, annotate, and download as MP4</p>
+
+    <div class="controls">
+        <div class="audio-toggles">
+            <label class="toggle-label">
+                <input type="checkbox" id="systemAudio" checked>
+                System Audio
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="micAudio">
+                Microphone
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="webcamOverlay">
+                Webcam overlay
+            </label>
+            <label class="toggle-label">
+                <input type="checkbox" id="transcriptionToggle">
+                Transcription
+            </label>
+        </div>
+
+        <div class="recording-status" id="recordingStatus"></div>
+
+        <div class="btn-row">
+            <button type="button" class="btn-record" id="btnRecord">Start Recording</button>
+            <button type="button" class="btn-pause" id="btnPause" disabled>Pause</button>
+            <button type="button" class="btn-stop" id="btnStop" disabled>Stop</button>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn-download" id="btnDownloadRaw" disabled>Download Raw</button>
+            <button type="button" class="btn-download" id="btnDownload" disabled>Finalize MP4</button>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <div class="transcription-panel" id="transcriptionPanel">
+        <div class="transcription-drag-bar" id="transcriptionDragBar"></div>
+        <div class="transcription-live-dot" id="transcriptionLiveDot"></div>
+        <div class="transcript-body" id="transcriptBody"><span id="transcriptFinalContainer"></span><span id="transcriptInterimContainer"></span></div>
+    </div>
+
+    <div class="webcam-panel" id="webcamPanel">
+        <div class="webcam-drag-bar" id="webcamDragBar">
+            <span>Webcam &mdash; drag to move</span>
+            <button type="button" class="pip-btn" id="btnTogglePip">Pop out</button>
+        </div>
+        <video id="webcamVideo" autoplay muted playsinline></video>
+        <div class="pip-placeholder">Floating in Picture-in-Picture</div>
+        <div class="webcam-resize-handle" id="webcamResizeHandle"></div>
+    </div>
+
+    <div class="preview-section" id="previewSection">
+        <h2>Preview</h2>
+
+        <div class="editor-toolbar" id="editorToolbar">
+            <div class="tool-group" id="toolButtons">
+                <button class="tool-btn" data-tool="text">Text</button>
+                <button class="tool-btn" data-tool="arrow">Arrow</button>
+                <button class="tool-btn" data-tool="rect">Box</button>
+                <button class="tool-btn" data-tool="highlight">Highlight</button>
+                <button class="tool-btn" data-tool="pen">Pen</button>
+            </div>
+
+            <div class="tool-group" id="colorSwatches">
+                <button class="color-swatch active" data-color="#ff3838" style="background:#ff3838" title="Red"></button>
+                <button class="color-swatch" data-color="#ffc107" style="background:#ffc107" title="Yellow"></button>
+                <button class="color-swatch" data-color="#28a745" style="background:#28a745" title="Green"></button>
+                <button class="color-swatch" data-color="#3aa0ff" style="background:#3aa0ff" title="Blue"></button>
+                <button class="color-swatch" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+            </div>
+
+            <div class="tool-group">
+                <label class="duration-control">
+                    Duration
+                    <input type="range" id="durationSlider" min="1" max="15" value="3">
+                    <span class="duration-value" id="durationValue">3s</span>
+                </label>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" id="btnUndo">Undo</button>
+                <button class="tool-btn" id="btnClearAnn">Clear</button>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn primary" id="btnExportAnn">Export with annotations</button>
+                <span class="export-status" id="exportStatus"></span>
+            </div>
+        </div>
+
+        <div class="preview-wrapper" id="previewWrapper">
+            <video id="previewVideo" controls></video>
+            <canvas id="annotationCanvas"></canvas>
+            <div class="text-editor-pop" id="textEditorPop">
+                <input type="text" id="textEditorInput" placeholder="Type then press Enter">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ---------- DOM ----------
+        const btnRecord = document.getElementById('btnRecord');
+        const btnPause = document.getElementById('btnPause');
+        const btnStop = document.getElementById('btnStop');
+        const btnDownload = document.getElementById('btnDownload');
+        const btnDownloadRaw = document.getElementById('btnDownloadRaw');
+        const systemAudioCheckbox = document.getElementById('systemAudio');
+        const micAudioCheckbox = document.getElementById('micAudio');
+        const webcamOverlayCheckbox = document.getElementById('webcamOverlay');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const previewSection = document.getElementById('previewSection');
+        const previewVideo = document.getElementById('previewVideo');
+        const errorMessage = document.getElementById('errorMessage');
+
+        const transcriptionToggle = document.getElementById('transcriptionToggle');
+        const transcriptionPanel = document.getElementById('transcriptionPanel');
+        const transcriptionDragBar = document.getElementById('transcriptionDragBar');
+        const transcriptBody = document.getElementById('transcriptBody');
+        const transcriptFinalContainer = document.getElementById('transcriptFinalContainer');
+        const transcriptInterimContainer = document.getElementById('transcriptInterimContainer');
+
+        const webcamPanel = document.getElementById('webcamPanel');
+        const webcamVideo = document.getElementById('webcamVideo');
+        const webcamDragBar = document.getElementById('webcamDragBar');
+        const webcamResizeHandle = document.getElementById('webcamResizeHandle');
+        const btnTogglePip = document.getElementById('btnTogglePip');
+
+        const editorToolbar = document.getElementById('editorToolbar');
+        const annotationCanvas = document.getElementById('annotationCanvas');
+        const annotationCtx = annotationCanvas.getContext('2d');
+        const toolButtons = document.getElementById('toolButtons');
+        const colorSwatches = document.getElementById('colorSwatches');
+        const durationSlider = document.getElementById('durationSlider');
+        const durationValue = document.getElementById('durationValue');
+        const btnUndo = document.getElementById('btnUndo');
+        const btnClearAnn = document.getElementById('btnClearAnn');
+        const btnExportAnn = document.getElementById('btnExportAnn');
+        const exportStatus = document.getElementById('exportStatus');
+        const textEditorPop = document.getElementById('textEditorPop');
+        const textEditorInput = document.getElementById('textEditorInput');
+
+        // ---------- State ----------
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingBlob = null;
+        let recordingMimeType = 'video/webm';
+        let timerInterval = null;
+        let elapsedSeconds = 0;
+        let screenStream = null;
+        let micStream = null;
+        let webcamStream = null;
+        let combinedStream = null;
+        let audioCtx = null;
+        let audioDest = null;
+        let previewObjectUrl = null;
+        let recordingCanvas = null;
+        let recordingCtx = null;
+        let recordingCanvasStream = null;
+        let recordingScreenVideo = null;
+        let recordingWebcamVideo = null;
+        let recordingDrawFrameId = null;
+        const RECORDING_FPS = 30;
+        let mp4Processing = false;
+        let activeFfmpeg = null;
+        let mp4CancelRequested = false;
+
+        let recognition = null;
+        let transcriptFinal = '';
+        let transcriptInterim = '';
+        let transcriptionActive = false;
+        let interimWords = [];
+        let finalWordCount = 0;
+
+        // Annotations are stored in NORMALIZED (0-1) coords so the same array
+        // renders correctly at preview size AND at the full video resolution
+        // used by the export pipeline.
+        let annotations = [];
+        let selectedTool = null;
+        let selectedColor = '#ff3838';
+        let defaultDuration = 3;
+        let drawingAnn = null;
+        let rafId = null;
+
+        // ---------- Utilities ----------
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorMessage.classList.add('visible');
+        }
+
+        function clearError() {
+            errorMessage.textContent = '';
+            errorMessage.classList.remove('visible');
+        }
+
+        function formatTime(totalSeconds) {
+            const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const secs = (totalSeconds % 60).toString().padStart(2, '0');
+            return `${hrs}:${mins}:${secs}`;
+        }
+
+        function startTimer() {
+            elapsedSeconds = 0;
+            timerInterval = setInterval(function() {
+                elapsedSeconds++;
+                const timerEl = document.querySelector('.timer');
+                if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+
+        function pickRecorderMimeType() {
+            // Record to WebM, then transcode to a standard MP4 on download.
+            // Browser-native MP4 MediaRecorder output is inconsistent on Windows.
+            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) return 'video/webm;codecs=vp9,opus';
+            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) return 'video/webm;codecs=vp8,opus';
+            return 'video/webm';
+        }
+
+        function makeMediaRecorder(stream) {
+            recordingMimeType = pickRecorderMimeType();
+            try {
+                return new MediaRecorder(stream, { mimeType: recordingMimeType });
+            } catch (err) {
+                console.warn('Preferred recorder MIME failed; using browser default:', err);
+                recordingMimeType = '';
+                return new MediaRecorder(stream);
+            }
+        }
+
+        function waitForVideoMetadata(video) {
+            if (video.videoWidth && video.videoHeight) return Promise.resolve();
+            return new Promise(function(resolve, reject) {
+                var timeout = setTimeout(function() {
+                    cleanup();
+                    resolve();
+                }, 2500);
+
+                function cleanup() {
+                    clearTimeout(timeout);
+                    video.removeEventListener('loadedmetadata', onLoaded);
+                    video.removeEventListener('error', onError);
+                }
+
+                function onLoaded() {
+                    cleanup();
+                    resolve();
+                }
+
+                function onError() {
+                    cleanup();
+                    reject(new Error('Could not read video metadata.'));
+                }
+
+                video.addEventListener('loadedmetadata', onLoaded, { once: true });
+                video.addEventListener('error', onError, { once: true });
+            });
+        }
+
+        function prepareRecordingVideo(stream) {
+            var video = document.createElement('video');
+            video.srcObject = stream;
+            video.muted = true;
+            video.playsInline = true;
+            return waitForVideoMetadata(video).then(function() {
+                return video.play().then(function() { return video; });
+            });
+        }
+
+        function setRecordingUI(state) {
+            if (state === 'recording') {
+                recordingStatus.innerHTML = '<div class="red-dot"></div><span class="timer">00:00:00</span>';
+                btnRecord.disabled = true;
+                btnPause.disabled = false;
+                btnStop.disabled = false;
+                btnDownload.disabled = true;
+                btnDownloadRaw.disabled = true;
+                systemAudioCheckbox.disabled = true;
+                micAudioCheckbox.disabled = true;
+                webcamOverlayCheckbox.disabled = true;
+                transcriptionToggle.disabled = true;
+                previewSection.classList.remove('visible');
+                editorToolbar.classList.remove('visible');
+            } else if (state === 'paused') {
+                var dot = document.querySelector('.red-dot');
+                if (dot) dot.classList.add('paused-indicator');
+                btnPause.textContent = 'Resume';
+            } else if (state === 'resumed') {
+                var dot = document.querySelector('.red-dot');
+                if (dot) dot.classList.remove('paused-indicator');
+                btnPause.textContent = 'Pause';
+            } else if (state === 'stopped') {
+                recordingStatus.innerHTML = '';
+                btnRecord.disabled = false;
+                btnPause.disabled = true;
+                btnPause.textContent = 'Pause';
+                btnStop.disabled = true;
+                systemAudioCheckbox.disabled = false;
+                micAudioCheckbox.disabled = false;
+                webcamOverlayCheckbox.disabled = false;
+                transcriptionToggle.disabled = false;
+            }
+        }
+
+        // ---------- Webcam overlay ----------
+        function setupWebcam() {
+            return navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 } }
+            }).then(function(stream) {
+                webcamStream = stream;
+                webcamVideo.srcObject = stream;
+                webcamPanel.classList.add('visible');
+                return webcamVideo.play().catch(function() {});
+            }).then(function() {
+                if (document.pictureInPictureEnabled && !webcamVideo.disablePictureInPicture) {
+                    return webcamVideo.requestPictureInPicture().catch(function(err) {
+                        console.warn('Auto Picture-in-Picture failed; use the Pop out button:', err);
+                    });
+                }
+            }).catch(function(err) {
+                console.warn('Webcam access failed:', err);
+                showError('Webcam access denied: ' + err.message);
+                webcamStream = null;
+            });
+        }
+
+        function teardownWebcam() {
+            if (document.pictureInPictureElement === webcamVideo) {
+                document.exitPictureInPicture().catch(function() {});
+            }
+            webcamPanel.classList.remove('visible');
+            webcamPanel.classList.remove('pip-active');
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(function(t) { t.stop(); });
+                webcamStream = null;
+            }
+            webcamVideo.srcObject = null;
+        }
+
+        webcamVideo.addEventListener('enterpictureinpicture', function() {
+            webcamPanel.classList.add('pip-active');
+            btnTogglePip.textContent = 'Bring back';
+        });
+
+        webcamVideo.addEventListener('leavepictureinpicture', function() {
+            webcamPanel.classList.remove('pip-active');
+            btnTogglePip.textContent = 'Pop out';
+        });
+
+        btnTogglePip.onclick = function() {
+            if (!webcamStream) return;
+            if (document.pictureInPictureElement === webcamVideo) {
+                document.exitPictureInPicture().catch(function(err) {
+                    console.warn('exitPictureInPicture failed:', err);
+                });
+            } else {
+                webcamVideo.requestPictureInPicture().catch(function(err) {
+                    showError('Picture-in-Picture failed: ' + err.message);
+                });
+            }
+        };
+
+        // Pointer events (not mouse) so drag/resize work with trackpad/touch and
+        // capture survives a fast drag that briefly leaves the element.
+        (function enableWebcamDragging() {
+            let dragging = false;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            webcamDragBar.addEventListener('pointerdown', function(e) {
+                if (e.target.tagName === 'BUTTON') return;
+                dragging = true;
+                const rect = webcamPanel.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                webcamDragBar.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            webcamDragBar.addEventListener('pointermove', function(e) {
+                if (!dragging) return;
+                const newLeft = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - offsetX));
+                const newTop = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
+                webcamPanel.style.left = newLeft + 'px';
+                webcamPanel.style.top = newTop + 'px';
+                webcamPanel.style.right = 'auto';
+            });
+
+            webcamDragBar.addEventListener('pointerup', function(e) {
+                dragging = false;
+                try { webcamDragBar.releasePointerCapture(e.pointerId); } catch (_) {}
+            });
+        })();
+
+        (function enableWebcamResizing() {
+            let resizing = false;
+            let startWidth = 0;
+            let startX = 0;
+
+            webcamResizeHandle.addEventListener('pointerdown', function(e) {
+                resizing = true;
+                startWidth = webcamPanel.getBoundingClientRect().width;
+                startX = e.clientX;
+                webcamResizeHandle.setPointerCapture(e.pointerId);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+
+            webcamResizeHandle.addEventListener('pointermove', function(e) {
+                if (!resizing) return;
+                const newWidth = Math.max(160, Math.min(720, startWidth + (e.clientX - startX)));
+                webcamPanel.style.width = newWidth + 'px';
+            });
+
+            webcamResizeHandle.addEventListener('pointerup', function(e) {
+                resizing = false;
+                try { webcamResizeHandle.releasePointerCapture(e.pointerId); } catch (_) {}
+            });
+        })();
+
+        // ---------- Transcription ----------
+        function resetTranscriptDOM() {
+            transcriptFinalContainer.textContent = '';
+            transcriptInterimContainer.textContent = '';
+            interimWords = [];
+            finalWordCount = 0;
+        }
+
+        function scrollTranscriptToBottom() {
+            transcriptBody.scrollTop = transcriptBody.scrollHeight;
+        }
+
+        function appendFinalWords(newWords) {
+            for (var i = 0; i < newWords.length; i++) {
+                var span = document.createElement('span');
+                span.className = 'transcript-word';
+                var needsSpace = transcriptFinalContainer.childNodes.length > 0;
+                span.textContent = (needsSpace ? ' ' : '') + newWords[i];
+                transcriptFinalContainer.appendChild(span);
+                // Reflow then promote to visible so the 0->1 opacity transition runs.
+                span.getBoundingClientRect();
+                span.classList.add('visible');
+                finalWordCount++;
+            }
+        }
+
+        // LCS-based interim reconciliation: keep spans whose word still appears in
+        // the new partial result; only remove vanished words and append truly new
+        // ones. This eliminates the full-block flicker that textContent would cause.
+        function reconcileInterim(newWords) {
+            var oldWords = interimWords;
+            var m = oldWords.length, n = newWords.length;
+
+            var dp = new Array(m + 1);
+            for (var i = 0; i <= m; i++) {
+                dp[i] = new Array(n + 1).fill(0);
+            }
+            for (var i = 1; i <= m; i++) {
+                for (var j = 1; j <= n; j++) {
+                    if (oldWords[i - 1] === newWords[j - 1]) {
+                        dp[i][j] = dp[i - 1][j - 1] + 1;
+                    } else {
+                        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    }
+                }
+            }
+
+            var keepOld = new Array(m).fill(false);
+            var keepNew = new Array(n).fill(false);
+            var ii = m, jj = n;
+            while (ii > 0 && jj > 0) {
+                if (oldWords[ii - 1] === newWords[jj - 1]) {
+                    keepOld[ii - 1] = true;
+                    keepNew[jj - 1] = true;
+                    ii--; jj--;
+                } else if (dp[ii - 1][jj] >= dp[ii][jj - 1]) {
+                    ii--;
+                } else {
+                    jj--;
+                }
+            }
+
+            var spans = Array.prototype.slice.call(transcriptInterimContainer.childNodes);
+            var keptSpans = [];
+            for (var k = 0; k < spans.length; k++) {
+                if (keepOld[k]) {
+                    keptSpans.push(spans[k]);
+                } else {
+                    transcriptInterimContainer.removeChild(spans[k]);
+                }
+            }
+
+            // Walk the new sequence; for kept words advance through keptSpans,
+            // for new words insert a fresh interim span at the correct position.
+            var keptIdx = 0;
+            for (var k = 0; k < n; k++) {
+                if (keepNew[k]) {
+                    keptIdx++;
+                } else {
+                    var span = document.createElement('span');
+                    span.className = 'transcript-word';
+                    var needsSpace = (k > 0) || (transcriptFinalContainer.childNodes.length > 0);
+                    span.textContent = (needsSpace ? ' ' : '') + newWords[k];
+                    var anchor = keptSpans[keptIdx] || null;
+                    transcriptInterimContainer.insertBefore(span, anchor);
+                    // Reflow then add .interim so opacity transitions from 0 to 0.45.
+                    span.getBoundingClientRect();
+                    span.classList.add('interim');
+                }
+            }
+
+            interimWords = newWords.slice();
+        }
+
+        function tokenize(s) {
+            s = (s || '').trim();
+            if (!s) return [];
+            return s.split(/\s+/);
+        }
+
+        function startTranscription() {
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return;
+
+            transcriptFinal = '';
+            transcriptInterim = '';
+            transcriptionActive = true;
+            transcriptionPanel.classList.add('visible');
+            resetTranscriptDOM();
+
+            function createRecognizer() {
+                var r = new SpeechRecognition();
+                r.continuous = true;
+                r.interimResults = true;
+                r.lang = 'en-US';
+
+                r.onresult = function(e) {
+                    var interim = '';
+                    var newFinalChunk = '';
+                    for (var i = e.resultIndex; i < e.results.length; i++) {
+                        var result = e.results[i];
+                        if (result.isFinal) {
+                            newFinalChunk += (newFinalChunk ? ' ' : '') + result[0].transcript.trim();
+                        } else {
+                            interim += result[0].transcript;
+                        }
+                    }
+
+                    if (newFinalChunk) {
+                        // Commit: clear interim DOM first so newly final words don't double-render.
+                        while (transcriptInterimContainer.firstChild) {
+                            transcriptInterimContainer.removeChild(transcriptInterimContainer.firstChild);
+                        }
+                        interimWords = [];
+                        var newWords = tokenize(newFinalChunk);
+                        appendFinalWords(newWords);
+                        transcriptFinal += (transcriptFinal ? ' ' : '') + newFinalChunk;
+                    }
+
+                    transcriptInterim = interim;
+                    reconcileInterim(tokenize(interim));
+                    scrollTranscriptToBottom();
+                };
+
+                // The Web Speech API stops after silence; restart to keep it continuous.
+                r.onend = function() {
+                    transcriptInterim = '';
+                    interimWords = [];
+                    while (transcriptInterimContainer.firstChild) {
+                        transcriptInterimContainer.removeChild(transcriptInterimContainer.firstChild);
+                    }
+                    if (transcriptionActive) {
+                        recognition = createRecognizer();
+                        try { recognition.start(); } catch (_) {}
+                    }
+                };
+
+                r.onerror = function(e) {
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                        transcriptionActive = false;
+                        transcriptionPanel.classList.remove('visible');
+                    }
+                };
+
+                return r;
+            }
+
+            recognition = createRecognizer();
+            try { recognition.start(); } catch (_) {}
+        }
+
+        function stopTranscription() {
+            transcriptionActive = false;
+            transcriptInterim = '';
+            interimWords = [];
+            transcriptionPanel.classList.remove('visible');
+            if (recognition) {
+                try { recognition.stop(); } catch (_) {}
+                recognition = null;
+            }
+            while (transcriptInterimContainer.firstChild) {
+                transcriptInterimContainer.removeChild(transcriptInterimContainer.firstChild);
+            }
+        }
+
+        (function enableTranscriptionDragging() {
+            var dragging = false;
+            var offsetX = 0;
+            var offsetY = 0;
+
+            transcriptionDragBar.addEventListener('pointerdown', function(e) {
+                dragging = true;
+                var rect = transcriptionPanel.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                transcriptionDragBar.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            transcriptionDragBar.addEventListener('pointermove', function(e) {
+                if (!dragging) return;
+                var newLeft = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - offsetX));
+                var newTop = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
+                transcriptionPanel.style.left = newLeft + 'px';
+                transcriptionPanel.style.top = newTop + 'px';
+            });
+
+            transcriptionDragBar.addEventListener('pointerup', function(e) {
+                dragging = false;
+                try { transcriptionDragBar.releasePointerCapture(e.pointerId); } catch (_) {}
+            });
+        })();
+
+        // ---------- Recording flow ----------
+        function startRecording() {
+            clearError();
+            recordedChunks = [];
+            recordingBlob = null;
+
+            // Tear down any prior preview so we don't leak the blob URL.
+            transcriptionPanel.classList.remove('visible');
+            transcriptFinal = '';
+            transcriptInterim = '';
+            resetTranscriptDOM();
+            annotations = [];
+            editorToolbar.classList.remove('visible');
+            previewSection.classList.remove('visible');
+            if (previewObjectUrl) {
+                URL.revokeObjectURL(previewObjectUrl);
+                previewObjectUrl = null;
+            }
+            previewVideo.removeAttribute('src');
+            previewVideo.load();
+
+            var displayMediaOptions = {
+                video: true,
+                audio: systemAudioCheckbox.checked
+            };
+
+            navigator.mediaDevices.getDisplayMedia(displayMediaOptions).then(function(stream) {
+                screenStream = stream;
+                var pending = [];
+
+                if (micAudioCheckbox.checked) {
+                    pending.push(
+                        navigator.mediaDevices.getUserMedia({ audio: true })
+                            .then(function(mic) { micStream = mic; })
+                            .catch(function(err) {
+                                console.warn('Microphone access denied:', err);
+                                micStream = null;
+                            })
+                    );
+                }
+
+            if (webcamOverlayCheckbox.checked) {
+                pending.push(setupWebcam());
+            }
+
+            return Promise.all(pending).then(beginRecording);
+        }).catch(function(err) {
+            if (err.name === 'NotAllowedError') {
+                showError('Screen sharing was cancelled.');
+            } else {
+                showError('Recording failed: ' + err.message);
+            }
+            console.error('Recording startup error:', err);
+            stopAllStreams();
+        });
+        }
+
+        // MediaRecorder only encodes the FIRST audio track of its source stream,
+        // so when System Audio + Mic are both on we mix them through WebAudio.
+        function buildMixedAudioTrack() {
+            var screenAudio = screenStream ? screenStream.getAudioTracks() : [];
+            var micAudio = micStream ? micStream.getAudioTracks() : [];
+
+            var sources = [];
+            if (screenAudio.length > 0) sources.push(screenStream);
+            if (micAudio.length > 0) sources.push(micStream);
+
+            if (sources.length === 0) return null;
+            if (sources.length === 1) return sources[0].getAudioTracks()[0];
+
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioDest = audioCtx.createMediaStreamDestination();
+            sources.forEach(function(s) {
+                audioCtx.createMediaStreamSource(s).connect(audioDest);
+            });
+            return audioDest.stream.getAudioTracks()[0];
+        }
+
+        function drawRoundedRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        function drawRecordingWebcamOverlay() {
+            if (!recordingWebcamVideo || recordingWebcamVideo.readyState < 2) return;
+
+            var panelRect = webcamPanel.getBoundingClientRect();
+            var scaleX = recordingCanvas.width / Math.max(1, window.innerWidth);
+            var scaleY = recordingCanvas.height / Math.max(1, window.innerHeight);
+            var fallbackWidth = Math.round(recordingCanvas.width * 0.22);
+            var fallbackHeight = Math.round(fallbackWidth * 0.75);
+            var margin = Math.round(recordingCanvas.width * 0.018);
+
+            var w = panelRect.width > 0 ? Math.round(panelRect.width * scaleX) : fallbackWidth;
+            var h = panelRect.height > 0 ? Math.round((panelRect.height - webcamDragBar.offsetHeight) * scaleY) : fallbackHeight;
+            w = Math.max(160, Math.min(recordingCanvas.width * 0.45, w));
+            h = Math.max(90, Math.min(recordingCanvas.height * 0.45, h));
+
+            var x = panelRect.width > 0 ? Math.round(panelRect.left * scaleX) : recordingCanvas.width - w - margin;
+            var y = panelRect.height > 0 ? Math.round((panelRect.top + webcamDragBar.offsetHeight) * scaleY) : recordingCanvas.height - h - margin;
+            x = Math.max(margin, Math.min(recordingCanvas.width - w - margin, x));
+            y = Math.max(margin, Math.min(recordingCanvas.height - h - margin, y));
+
+            var radius = Math.max(8, Math.round(w * 0.05));
+            recordingCtx.save();
+            drawRoundedRect(recordingCtx, x, y, w, h, radius);
+            recordingCtx.clip();
+            recordingCtx.fillStyle = '#000';
+            recordingCtx.fillRect(x, y, w, h);
+            recordingCtx.translate(x + w, y);
+            recordingCtx.scale(-1, 1);
+            recordingCtx.drawImage(recordingWebcamVideo, 0, 0, w, h);
+            recordingCtx.restore();
+
+            recordingCtx.save();
+            recordingCtx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            recordingCtx.lineWidth = Math.max(2, Math.round(w * 0.012));
+            drawRoundedRect(recordingCtx, x, y, w, h, radius);
+            recordingCtx.stroke();
+            recordingCtx.restore();
+        }
+
+        function startRecordingCompositor() {
+            var screenTrack = screenStream.getVideoTracks()[0];
+            var settings = screenTrack.getSettings ? screenTrack.getSettings() : {};
+            var width = recordingScreenVideo.videoWidth || settings.width || 1280;
+            var height = recordingScreenVideo.videoHeight || settings.height || 720;
+
+            recordingCanvas = document.createElement('canvas');
+            recordingCanvas.width = width;
+            recordingCanvas.height = height;
+            recordingCtx = recordingCanvas.getContext('2d', { alpha: false });
+
+            function drawFrame() {
+                if (recordingScreenVideo && recordingScreenVideo.readyState >= 2) {
+                    recordingCtx.drawImage(recordingScreenVideo, 0, 0, recordingCanvas.width, recordingCanvas.height);
+                } else {
+                    recordingCtx.fillStyle = '#000';
+                    recordingCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+                }
+                drawRecordingWebcamOverlay();
+                recordingDrawFrameId = requestAnimationFrame(drawFrame);
+            }
+
+            drawFrame();
+            recordingCanvasStream = recordingCanvas.captureStream(RECORDING_FPS);
+            return recordingCanvasStream.getVideoTracks()[0];
+        }
+
+        function stopRecordingCompositor() {
+            if (recordingDrawFrameId) {
+                cancelAnimationFrame(recordingDrawFrameId);
+                recordingDrawFrameId = null;
+            }
+            if (recordingCanvasStream) {
+                recordingCanvasStream.getTracks().forEach(function(t) { t.stop(); });
+                recordingCanvasStream = null;
+            }
+            if (recordingScreenVideo) {
+                recordingScreenVideo.srcObject = null;
+                recordingScreenVideo = null;
+            }
+            if (recordingWebcamVideo) {
+                recordingWebcamVideo.srcObject = null;
+                recordingWebcamVideo = null;
+            }
+            recordingCanvas = null;
+            recordingCtx = null;
+        }
+
+        async function beginRecording() {
+            var tracks = [];
+            var sourceVideoTrack = screenStream.getVideoTracks()[0];
+            var videoTrack = sourceVideoTrack;
+
+            tracks.push(videoTrack);
+
+            var mixedAudio = buildMixedAudioTrack();
+            if (mixedAudio) tracks.push(mixedAudio);
+
+            combinedStream = new MediaStream(tracks);
+            mediaRecorder = makeMediaRecorder(combinedStream);
+            console.log('Recording with mime type:', recordingMimeType || 'browser default');
+
+            mediaRecorder.ondataavailable = function(event) {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
+
+            mediaRecorder.onerror = function(e) {
+                console.error('MediaRecorder error:', e);
+                showError('Recording error: ' + ((e.error && e.error.message) || 'unknown'));
+            };
+
+            mediaRecorder.onstop = function() {
+                stopTimer();
+                setRecordingUI('stopped');
+                stopAllStreams();
+                if (transcriptionActive) stopTranscription();
+
+                recordingBlob = new Blob(recordedChunks, { type: recordingMimeType });
+                previewObjectUrl = URL.createObjectURL(recordingBlob);
+                previewVideo.src = previewObjectUrl;
+                previewSection.classList.add('visible');
+                btnDownloadRaw.disabled = false;
+                btnDownload.disabled = false;
+            };
+
+            sourceVideoTrack.onended = function() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+            };
+
+            mediaRecorder.start(1000);
+            setRecordingUI('recording');
+            startTimer();
+            if (transcriptionToggle.checked) startTranscription();
+        }
+
+        function pauseRecording() {
+            if (!mediaRecorder) return;
+
+            if (mediaRecorder.state === 'recording') {
+                mediaRecorder.pause();
+                stopTimer();
+                setRecordingUI('paused');
+            } else if (mediaRecorder.state === 'paused') {
+                mediaRecorder.resume();
+                timerInterval = setInterval(function() {
+                    elapsedSeconds++;
+                    var timerEl = document.querySelector('.timer');
+                    if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
+                }, 1000);
+                setRecordingUI('resumed');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        }
+
+        function stopAllStreams() {
+            stopRecordingCompositor();
+            if (combinedStream) {
+                combinedStream.getTracks().forEach(function(t) { t.stop(); });
+                combinedStream = null;
+            }
+            if (screenStream) {
+                screenStream.getTracks().forEach(function(t) { t.stop(); });
+                screenStream = null;
+            }
+            if (micStream) {
+                micStream.getTracks().forEach(function(t) { t.stop(); });
+                micStream = null;
+            }
+            teardownWebcam();
+            if (audioCtx) {
+                audioCtx.close().catch(function() {});
+                audioCtx = null;
+                audioDest = null;
+            }
+        }
+
+        // ---------- ffmpeg.wasm MP4 finalizing ----------
+        // MediaRecorder produces browser-friendly WebM. ffmpeg.wasm turns it
+        // into a stock Windows-friendly MP4 with H.264 video and AAC audio.
+        let ffmpegPromise = null;
+        function loadScriptOnce(src, globalName) {
+            if (window[globalName]) return Promise.resolve(window[globalName]);
+            return new Promise(function(resolve, reject) {
+                var script = document.createElement('script');
+                script.src = src;
+                script.onload = function() { resolve(window[globalName]); };
+                script.onerror = function() { reject(new Error('Could not load ' + src)); };
+                document.head.appendChild(script);
+            });
+        }
+
+        async function toBlobURL(url, mimeType) {
+            var response = await fetch(url);
+            if (!response.ok) throw new Error('Could not load ' + url);
+            var blob = await response.blob();
+            return URL.createObjectURL(new Blob([blob], { type: mimeType }));
+        }
+
+        function loadFfmpeg() {
+            if (ffmpegPromise) return ffmpegPromise;
+            ffmpegPromise = (async function() {
+                if (window.__SCREEN_RECORDER_TEST_FFMPEG__) {
+                    return window.__SCREEN_RECORDER_TEST_FFMPEG__;
+                }
+                var ffmpegMod = await loadScriptOnce('./vendor/ffmpeg/ffmpeg.js', 'FFmpegWASM');
+                const ffmpeg = new ffmpegMod.FFmpeg();
+                const baseURL = './vendor/ffmpeg';
+                await ffmpeg.load({
+                    coreURL: await toBlobURL(baseURL + '/ffmpeg-core.js', 'text/javascript'),
+                    wasmURL: await toBlobURL(baseURL + '/ffmpeg-core.wasm', 'application/wasm'),
+                });
+                return ffmpeg;
+            })().catch(function(err) {
+                ffmpegPromise = null;
+                throw err;
+            });
+            return ffmpegPromise;
+        }
+
+        async function transcodeToStandardMp4(inputBlob, sourceExt, onProgress) {
+            const ffmpeg = await loadFfmpeg();
+            activeFfmpeg = ffmpeg;
+            const inName = 'in.' + sourceExt;
+            const outName = 'out.mp4';
+
+            const progressListener = onProgress ? function(e) {
+                const pct = Math.max(0, Math.min(100, Math.round((e.progress || 0) * 100)));
+                onProgress(pct);
+            } : null;
+            if (progressListener) ffmpeg.on('progress', progressListener);
+
+            try {
+                const ab = await inputBlob.arrayBuffer();
+                await ffmpeg.writeFile(inName, new Uint8Array(ab));
+                await ffmpeg.exec([
+                    '-i', inName,
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '23',
+                    '-pix_fmt', 'yuv420p',
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-movflags', '+faststart',
+                    outName,
+                ]);
+                const data = await ffmpeg.readFile(outName);
+                return new Blob([data.buffer], { type: 'video/mp4' });
+            } finally {
+                if (progressListener) ffmpeg.off('progress', progressListener);
+                try { await ffmpeg.deleteFile(inName); } catch (_) {}
+                try { await ffmpeg.deleteFile(outName); } catch (_) {}
+                activeFfmpeg = null;
+            }
+        }
+
+        function saveBlob(blob, filename) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function timestampedName(prefix, ext) {
+            var timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            return prefix + '-' + timestamp + '.' + ext;
+        }
+
+        function extFromMimeType(mt) {
+            return mt.startsWith('video/mp4') ? 'mp4' : 'webm';
+        }
+
+        function downloadRawRecording() {
+            if (!recordingBlob) return;
+            saveBlob(recordingBlob, timestampedName('recording-raw', extFromMimeType(recordingMimeType)));
+        }
+
+        function cancelMp4Processing() {
+            if (!mp4Processing) return;
+            try {
+                if (activeFfmpeg) activeFfmpeg.terminate();
+            } catch (_) {}
+            ffmpegPromise = null;
+            activeFfmpeg = null;
+            mp4Processing = false;
+            mp4CancelRequested = true;
+            btnDownload.textContent = 'Finalize MP4';
+            btnDownload.disabled = false;
+            btnDownloadRaw.disabled = false;
+            showError('MP4 finalizing was cancelled. The raw recording is still available.');
+        }
+
+        async function downloadRecording() {
+            if (!recordingBlob) return;
+            if (mp4Processing) {
+                cancelMp4Processing();
+                return;
+            }
+            var sourceExt = extFromMimeType(recordingMimeType);
+            var originalLabel = btnDownload.textContent;
+            mp4Processing = true;
+            mp4CancelRequested = false;
+            btnDownload.disabled = false;
+            btnDownloadRaw.disabled = false;
+            btnDownload.textContent = 'Processing… 0%';
+
+            try {
+                var mp4 = await transcodeToStandardMp4(recordingBlob, sourceExt, function(pct) {
+                    btnDownload.textContent = 'Processing… ' + pct + '%';
+                });
+                saveBlob(mp4, timestampedName('recording', 'mp4'));
+                btnDownload.textContent = 'Downloaded';
+                setTimeout(function() {
+                    btnDownload.textContent = originalLabel;
+                    btnDownload.disabled = false;
+                }, 2000);
+            } catch (err) {
+                console.error('MP4 transcode failed, falling back to raw:', err);
+                if (!mp4CancelRequested) {
+                    saveBlob(recordingBlob, timestampedName('recording-raw', sourceExt));
+                    showError('Could not finalize MP4 (' + err.message + '). Saved raw recording — open with VLC or Chrome.');
+                }
+                btnDownload.textContent = originalLabel;
+                btnDownload.disabled = false;
+                btnDownloadRaw.disabled = false;
+            } finally {
+                mp4Processing = false;
+                mp4CancelRequested = false;
+                activeFfmpeg = null;
+            }
+        }
+
+        btnRecord.onclick = startRecording;
+        btnPause.onclick = pauseRecording;
+        btnStop.onclick = stopRecording;
+        btnDownloadRaw.onclick = downloadRawRecording;
+        btnDownload.onclick = downloadRecording;
+
+        // ===========================================================
+        //                      Annotation editor
+        // ===========================================================
+
+        function selectTool(tool) {
+            selectedTool = tool;
+            Array.prototype.forEach.call(toolButtons.children, function(btn) {
+                if (btn.dataset.tool === tool) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            if (tool) annotationCanvas.classList.add('tool-active');
+            else annotationCanvas.classList.remove('tool-active');
+            hideTextEditor();
+        }
+
+        function selectColor(color) {
+            selectedColor = color;
+            Array.prototype.forEach.call(colorSwatches.children, function(btn) {
+                if (btn.dataset.color === color) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+        }
+
+        function resizeAnnotationCanvas() {
+            var rect = previewVideo.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            var dpr = window.devicePixelRatio || 1;
+            annotationCanvas.style.width = rect.width + 'px';
+            annotationCanvas.style.height = rect.height + 'px';
+            annotationCanvas.width = Math.round(rect.width * dpr);
+            annotationCanvas.height = Math.round(rect.height * dpr);
+            annotationCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        function getCanvasPoint(e) {
+            var rect = annotationCanvas.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) / rect.width,
+                y: (e.clientY - rect.top) / rect.height
+            };
+        }
+
+        function genId() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        }
+
+        function onCanvasPointerDown(e) {
+            if (!selectedTool) return;
+            annotationCanvas.setPointerCapture(e.pointerId);
+            var p = getCanvasPoint(e);
+            var t = previewVideo.currentTime;
+
+            if (selectedTool === 'text') {
+                openTextEditor(p.x, p.y, t);
+                return;
+            }
+
+            drawingAnn = {
+                id: genId(),
+                type: selectedTool,
+                color: selectedColor,
+                startTime: t,
+                endTime: t + defaultDuration
+            };
+
+            if (selectedTool === 'arrow') {
+                drawingAnn.x1 = p.x; drawingAnn.y1 = p.y;
+                drawingAnn.x2 = p.x; drawingAnn.y2 = p.y;
+            } else if (selectedTool === 'rect' || selectedTool === 'highlight') {
+                drawingAnn.x = p.x; drawingAnn.y = p.y;
+                drawingAnn.width = 0; drawingAnn.height = 0;
+                drawingAnn._sx = p.x; drawingAnn._sy = p.y;
+            } else if (selectedTool === 'pen') {
+                drawingAnn.points = [p];
+            }
+            renderPreviewFrame();
+        }
+
+        function onCanvasPointerMove(e) {
+            if (!drawingAnn) return;
+            var p = getCanvasPoint(e);
+
+            if (drawingAnn.type === 'arrow') {
+                drawingAnn.x2 = p.x; drawingAnn.y2 = p.y;
+            } else if (drawingAnn.type === 'rect' || drawingAnn.type === 'highlight') {
+                drawingAnn.x = Math.min(drawingAnn._sx, p.x);
+                drawingAnn.y = Math.min(drawingAnn._sy, p.y);
+                drawingAnn.width = Math.abs(p.x - drawingAnn._sx);
+                drawingAnn.height = Math.abs(p.y - drawingAnn._sy);
+            } else if (drawingAnn.type === 'pen') {
+                drawingAnn.points.push(p);
+            }
+            renderPreviewFrame();
+        }
+
+        function onCanvasPointerUp(e) {
+            if (!drawingAnn) return;
+            try { annotationCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+            // Drop accidental zero-size annotations from a stray click
+            if (drawingAnn.type === 'rect' || drawingAnn.type === 'highlight') {
+                if (drawingAnn.width < 0.005 || drawingAnn.height < 0.005) {
+                    drawingAnn = null; renderPreviewFrame(); return;
+                }
+                delete drawingAnn._sx; delete drawingAnn._sy;
+            } else if (drawingAnn.type === 'arrow') {
+                var dx = drawingAnn.x2 - drawingAnn.x1;
+                var dy = drawingAnn.y2 - drawingAnn.y1;
+                if (Math.sqrt(dx*dx + dy*dy) < 0.01) {
+                    drawingAnn = null; renderPreviewFrame(); return;
+                }
+            } else if (drawingAnn.type === 'pen') {
+                if (drawingAnn.points.length < 2) {
+                    drawingAnn = null; renderPreviewFrame(); return;
+                }
+            }
+            annotations.push(drawingAnn);
+            drawingAnn = null;
+            renderPreviewFrame();
+        }
+
+        function openTextEditor(nx, ny, t) {
+            var wrapperRect = textEditorPop.offsetParent.getBoundingClientRect();
+            var videoRect = previewVideo.getBoundingClientRect();
+            textEditorPop.style.left = (videoRect.left - wrapperRect.left + nx * videoRect.width) + 'px';
+            textEditorPop.style.top = (videoRect.top - wrapperRect.top + ny * videoRect.height) + 'px';
+            textEditorPop.classList.add('visible');
+            textEditorInput.value = '';
+            textEditorInput.focus();
+            textEditorPop._x = nx;
+            textEditorPop._y = ny;
+            textEditorPop._t = t;
+        }
+
+        function commitTextAnnotation() {
+            var txt = textEditorInput.value.trim();
+            if (!txt) { hideTextEditor(); return; }
+            annotations.push({
+                id: genId(),
+                type: 'text',
+                color: selectedColor,
+                startTime: textEditorPop._t,
+                endTime: textEditorPop._t + defaultDuration,
+                x: textEditorPop._x,
+                y: textEditorPop._y,
+                text: txt
+            });
+            hideTextEditor();
+            renderPreviewFrame();
+        }
+
+        function hideTextEditor() {
+            textEditorPop.classList.remove('visible');
+            textEditorInput.value = '';
+        }
+
+        function undoLastAnnotation() {
+            annotations.pop();
+            renderPreviewFrame();
+        }
+
+        function clearAnnotations() {
+            annotations = [];
+            renderPreviewFrame();
+        }
+
+        function renderPreviewFrame() {
+            var rect = previewVideo.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            annotationCtx.clearRect(0, 0, rect.width, rect.height);
+            var t = previewVideo.currentTime;
+            for (var i = 0; i < annotations.length; i++) {
+                var a = annotations[i];
+                if (t >= a.startTime && t <= a.endTime) {
+                    drawAnnotation(annotationCtx, a, rect.width, rect.height);
+                }
+            }
+            if (drawingAnn) drawAnnotation(annotationCtx, drawingAnn, rect.width, rect.height);
+        }
+
+        function drawAnnotation(ctx, a, w, h) {
+            ctx.save();
+            ctx.strokeStyle = a.color;
+            ctx.fillStyle = a.color;
+            ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.005);
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if (a.type === 'rect') {
+                ctx.strokeRect(a.x * w, a.y * h, a.width * w, a.height * h);
+            } else if (a.type === 'highlight') {
+                ctx.globalAlpha = 0.3;
+                ctx.fillRect(a.x * w, a.y * h, a.width * w, a.height * h);
+            } else if (a.type === 'arrow') {
+                drawArrow(ctx, a.x1 * w, a.y1 * h, a.x2 * w, a.y2 * h);
+            } else if (a.type === 'text') {
+                var fontSize = Math.max(14, h * 0.04);
+                ctx.font = '600 ' + fontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                ctx.textBaseline = 'top';
+                var metrics = ctx.measureText(a.text);
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(a.x * w - 4, a.y * h - 2, metrics.width + 8, fontSize + 6);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = a.color;
+                ctx.fillText(a.text, a.x * w, a.y * h);
+            } else if (a.type === 'pen') {
+                ctx.beginPath();
+                for (var i = 0; i < a.points.length; i++) {
+                    var p = a.points[i];
+                    if (i === 0) ctx.moveTo(p.x * w, p.y * h);
+                    else ctx.lineTo(p.x * w, p.y * h);
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawArrow(ctx, x1, y1, x2, y2) {
+            var headLen = Math.max(12, ctx.lineWidth * 5);
+            var angle = Math.atan2(y2 - y1, x2 - x1);
+            // shaft
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2 - headLen * 0.6 * Math.cos(angle), y2 - headLen * 0.6 * Math.sin(angle));
+            ctx.stroke();
+            // head
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function startPreviewRenderLoop() {
+            if (rafId) return;
+            (function loop() {
+                renderPreviewFrame();
+                rafId = requestAnimationFrame(loop);
+            })();
+        }
+
+        function stopPreviewRenderLoop() {
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            renderPreviewFrame();
+        }
+
+        function drawTranscriptCaption(ctx, w, h, text) {
+            var fontSize = Math.max(18, Math.round(h * 0.032));
+            var padding = Math.round(fontSize * 0.7);
+            var maxWidth = w - padding * 2;
+            ctx.save();
+            ctx.font = fontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            ctx.textBaseline = 'top';
+
+            // Word-wrap text into lines that fit within maxWidth
+            var words = text.split(/\s+/);
+            var lines = [];
+            var line = '';
+            for (var i = 0; i < words.length; i++) {
+                var candidate = line ? line + ' ' + words[i] : words[i];
+                if (ctx.measureText(candidate).width > maxWidth && line) {
+                    lines.push(line);
+                    line = words[i];
+                } else {
+                    line = candidate;
+                }
+            }
+            if (line) lines.push(line);
+
+            var lineHeight = fontSize * 1.45;
+            var blockHeight = lines.length * lineHeight + padding * 2;
+            var barY = h - blockHeight;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+            ctx.fillRect(0, barY, w, blockHeight);
+
+            ctx.fillStyle = '#ffffff';
+            for (var j = 0; j < lines.length; j++) {
+                var lineW = ctx.measureText(lines[j]).width;
+                var lineX = Math.round((w - lineW) / 2);
+                var lineY = barY + padding + j * lineHeight;
+                ctx.fillText(lines[j], lineX, lineY);
+            }
+            ctx.restore();
+        }
+
+        // ---------- Export pipeline ----------
+        // Plays the recorded video into an offscreen canvas at native resolution,
+        // draws each annotation while its time window is active, and records the
+        // canvas + the video's audio with a fresh MediaRecorder. Real-time speed
+        // (a 5-min recording takes ~5 min to re-encode) - the browser doesn't
+        // expose a faster path without WebCodecs.
+        function exportWithAnnotations() {
+            if (!recordingBlob) return;
+
+            btnExportAnn.disabled = true;
+            exportStatus.textContent = 'Preparing...';
+
+            var exportVideo = document.createElement('video');
+            exportVideo.muted = false;
+            exportVideo.playsInline = true;
+            exportVideo.src = URL.createObjectURL(recordingBlob);
+
+            function fail(msg) {
+                console.error(msg);
+                exportStatus.textContent = msg;
+                btnExportAnn.disabled = false;
+                URL.revokeObjectURL(exportVideo.src);
+            }
+
+            exportVideo.addEventListener('loadedmetadata', function() {
+                var w = exportVideo.videoWidth;
+                var h = exportVideo.videoHeight;
+                if (!w || !h) { fail('Export failed: missing video dimensions'); return; }
+
+                var exportCanvas = document.createElement('canvas');
+                exportCanvas.width = w;
+                exportCanvas.height = h;
+                var exportCtx = exportCanvas.getContext('2d');
+
+                var canvasStream = exportCanvas.captureStream(30);
+
+                var sourceStream = null;
+                if (exportVideo.captureStream) sourceStream = exportVideo.captureStream();
+                else if (exportVideo.mozCaptureStream) sourceStream = exportVideo.mozCaptureStream();
+
+                var outStream = new MediaStream();
+                canvasStream.getVideoTracks().forEach(function(t) { outStream.addTrack(t); });
+                if (sourceStream) {
+                    sourceStream.getAudioTracks().forEach(function(t) { outStream.addTrack(t); });
+                }
+
+                var mimeType = pickRecorderMimeType();
+                var exportRecorder;
+                try {
+                    exportRecorder = new MediaRecorder(outStream, { mimeType: mimeType });
+                } catch (err) {
+                    fail('Export failed: ' + err.message);
+                    return;
+                }
+                var exportChunks = [];
+                exportRecorder.ondataavailable = function(e) {
+                    if (e.data.size > 0) exportChunks.push(e.data);
+                };
+
+                var renderFrameId = null;
+                function drawFrame() {
+                    exportCtx.drawImage(exportVideo, 0, 0, w, h);
+                    var t = exportVideo.currentTime;
+                    for (var i = 0; i < annotations.length; i++) {
+                        var a = annotations[i];
+                        if (t >= a.startTime && t <= a.endTime) {
+                            drawAnnotation(exportCtx, a, w, h);
+                        }
+                    }
+                    if (transcriptFinal) {
+                        drawTranscriptCaption(exportCtx, w, h, transcriptFinal);
+                    }
+                    var pct = Math.min(100, Math.floor(100 * t / Math.max(0.01, exportVideo.duration || 1)));
+                    exportStatus.textContent = 'Exporting... ' + pct + '%';
+                    if (!exportVideo.ended) {
+                        renderFrameId = requestAnimationFrame(drawFrame);
+                    }
+                }
+
+                exportRecorder.onstop = async function() {
+                    if (renderFrameId) cancelAnimationFrame(renderFrameId);
+                    var blob = new Blob(exportChunks, { type: mimeType });
+                    var sourceExt = extFromMimeType(mimeType);
+                    exportStatus.textContent = 'Finalizing… 0%';
+                    try {
+                        var mp4 = await transcodeToStandardMp4(blob, sourceExt, function(pct) {
+                            exportStatus.textContent = 'Finalizing… ' + pct + '%';
+                        });
+                        saveBlob(mp4, timestampedName('recording-annotated', 'mp4'));
+                        URL.revokeObjectURL(exportVideo.src);
+                        exportStatus.textContent = 'Done.';
+                        btnExportAnn.disabled = false;
+                        setTimeout(function() { exportStatus.textContent = ''; }, 4000);
+                    } catch (err) {
+                        console.error('Annotated MP4 transcode failed, falling back to raw:', err);
+                        saveBlob(blob, timestampedName('recording-annotated-raw', sourceExt));
+                        URL.revokeObjectURL(exportVideo.src);
+                        exportStatus.textContent = 'Saved raw — open with VLC.';
+                        btnExportAnn.disabled = false;
+                    }
+                };
+
+                exportRecorder.onerror = function(e) {
+                    fail('Export recorder error: ' + ((e.error && e.error.message) || 'unknown'));
+                };
+
+                exportVideo.onended = function() {
+                    if (exportRecorder.state !== 'inactive') exportRecorder.stop();
+                };
+
+                exportVideo.currentTime = 0;
+                exportVideo.play().then(function() {
+                    exportRecorder.start();
+                    renderFrameId = requestAnimationFrame(drawFrame);
+                }).catch(function(err) {
+                    fail('Export playback failed: ' + err.message);
+                });
+            }, { once: true });
+
+            exportVideo.addEventListener('error', function() {
+                fail('Export failed: could not load source video');
+            }, { once: true });
+        }
+
+        // ---------- Editor wiring ----------
+        toolButtons.addEventListener('click', function(e) {
+            var btn = e.target.closest('button[data-tool]');
+            if (!btn) return;
+            var tool = btn.dataset.tool;
+            selectTool(selectedTool === tool ? null : tool);
+        });
+
+        colorSwatches.addEventListener('click', function(e) {
+            var btn = e.target.closest('button[data-color]');
+            if (!btn) return;
+            selectColor(btn.dataset.color);
+        });
+
+        durationSlider.addEventListener('input', function() {
+            defaultDuration = parseInt(durationSlider.value, 10);
+            durationValue.textContent = defaultDuration + 's';
+        });
+
+        btnUndo.onclick = undoLastAnnotation;
+        btnClearAnn.onclick = clearAnnotations;
+        btnExportAnn.onclick = exportWithAnnotations;
+
+        annotationCanvas.addEventListener('pointerdown', onCanvasPointerDown);
+        annotationCanvas.addEventListener('pointermove', onCanvasPointerMove);
+        annotationCanvas.addEventListener('pointerup', onCanvasPointerUp);
+        annotationCanvas.addEventListener('pointercancel', onCanvasPointerUp);
+
+        textEditorInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                commitTextAnnotation();
+            } else if (e.key === 'Escape') {
+                hideTextEditor();
+            }
+        });
+
+        previewVideo.addEventListener('loadedmetadata', function() {
+            resizeAnnotationCanvas();
+            renderPreviewFrame();
+        });
+        previewVideo.addEventListener('timeupdate', renderPreviewFrame);
+        previewVideo.addEventListener('seeked', renderPreviewFrame);
+        previewVideo.addEventListener('play', startPreviewRenderLoop);
+        previewVideo.addEventListener('pause', stopPreviewRenderLoop);
+        previewVideo.addEventListener('ended', stopPreviewRenderLoop);
+
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(function() {
+                resizeAnnotationCanvas();
+                renderPreviewFrame();
+            }).observe(previewVideo);
+        }
+        window.addEventListener('resize', function() {
+            resizeAnnotationCanvas();
+            renderPreviewFrame();
+        });
+    </script>
+</body>
+</html>

@@ -3,12 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>gabes screen recorder - test</title>
+    <title>screen recorder</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        input, textarea, [contenteditable="true"], .selectable, .selectable * {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+        * { caret-color: transparent; }
+        input, textarea, [contenteditable="true"] { caret-color: auto; }
+        button:focus, [role="button"]:focus, a:focus { outline: none; }
+        button:focus-visible, [role="button"]:focus-visible, a:focus-visible,
+        select:focus-visible, input:focus-visible, textarea:focus-visible {
+            outline: 2px solid #4a9eff;
+            outline-offset: 2px;
         }
 
         body {
@@ -16,795 +29,367 @@
             background: #0f0f0f;
             color: #e0e0e0;
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        main {
+            width: 100%;
+            max-width: 720px;
         }
 
         h1 {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 600;
-            margin-bottom: 8px;
-            color: #ffffff;
+            color: #fff;
+            margin-bottom: 6px;
         }
 
         .subtitle {
             color: #888;
-            font-size: 14px;
-            margin-bottom: 32px;
+            font-size: 13px;
+            margin-bottom: 28px;
         }
 
-        .controls {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            width: 100%;
-            max-width: 500px;
-        }
+        section { margin-bottom: 24px; }
 
-        .audio-toggles {
+        .toggles {
             display: flex;
-            gap: 24px;
-            margin-bottom: 4px;
+            gap: 22px;
             flex-wrap: wrap;
-            justify-content: center;
         }
 
-        .toggle-label {
+        .toggle {
             display: flex;
             align-items: center;
             gap: 8px;
             font-size: 14px;
             color: #ccc;
             cursor: pointer;
-            user-select: none;
         }
 
-        .toggle-label input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            accent-color: #dc3545;
-            cursor: pointer;
-        }
+        .toggle input { accent-color: #dc3545; cursor: pointer; }
 
-        .btn-row {
-            display: flex;
-            gap: 12px;
-        }
-
-        button {
-            padding: 12px 28px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s, opacity 0.2s;
-            user-select: none;
-            -webkit-user-select: none;
-            outline: none;
-        }
-
-        button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .btn-record { background: #dc3545; color: #fff; }
-        .btn-record:hover:not(:disabled) { background: #c82333; }
-
-        .btn-pause { background: #ffc107; color: #000; }
-        .btn-pause:hover:not(:disabled) { background: #e0a800; }
-
-        .btn-stop { background: #555; color: #fff; }
-        .btn-stop:hover:not(:disabled) { background: #444; }
-
-        .btn-download { background: #28a745; color: #fff; }
-        .btn-download:hover:not(:disabled) { background: #218838; }
-
-        .recording-status {
+        .status {
             display: flex;
             align-items: center;
             gap: 10px;
+            height: 22px;
+            font-family: 'Consolas', 'Courier New', monospace;
             font-size: 16px;
-            height: 28px;
+            color: #fff;
         }
 
-        .red-dot {
-            width: 12px;
-            height: 12px;
-            background: #dc3545;
+        .dot {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            animation: pulse 1s ease-in-out infinite;
+            background: #444;
         }
 
-        .paused-indicator {
-            animation: none;
-            background: #ffc107;
+        .dot.recording {
+            background: #dc3545;
+            animation: pulse 1.1s ease-in-out infinite;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+            50% { opacity: 0.35; }
         }
 
-        .timer {
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 18px;
-            color: #fff;
-        }
-
-        .preview-section {
-            margin-top: 32px;
-            width: 100%;
-            max-width: 900px;
-            display: none;
-        }
-
-        .preview-section.visible {
-            display: block;
-        }
-
-        .preview-section h2 {
-            font-size: 18px;
-            margin-bottom: 12px;
-            color: #ccc;
-        }
-
-        .preview-wrapper {
-            position: relative;
-            width: 100%;
-            line-height: 0; /* prevent video bottom gap */
-        }
-
-        .preview-wrapper video {
-            width: 100%;
-            border-radius: 8px;
-            background: #000;
-            display: block;
-        }
-
-        #annotationCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            border-radius: 8px;
-            pointer-events: none;
-        }
-
-        #annotationCanvas.tool-active {
-            pointer-events: auto;
-            cursor: crosshair;
-        }
-
-        .error-message {
-            color: #dc3545;
-            font-size: 14px;
-            margin-top: 8px;
-            display: none;
-        }
-
-        .error-message.visible {
-            display: block;
-        }
-
-        /* Floating, draggable, resizable webcam panel */
-        .webcam-panel {
-            display: none;
-            position: fixed;
-            top: 100px;
-            right: 40px;
-            width: 260px;
-            background: #1a1a1a;
-            border: 2px solid #2a2a2a;
-            border-radius: 12px;
-            overflow: hidden;
-            z-index: 1000;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-            user-select: none;
-            touch-action: none;
-        }
-
-        .webcam-panel.visible { display: block; }
-
-        .webcam-drag-bar {
-            background: #222;
-            padding: 6px 10px;
-            font-size: 12px;
-            color: #aaa;
-            cursor: move;
+        .controls {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .webcam-drag-bar .pip-btn {
-            background: #444;
-            color: #eee;
-            border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .webcam-drag-bar .pip-btn:hover { background: #555; }
-
-        .webcam-panel video {
-            display: block;
-            width: 100%;
-            aspect-ratio: 4 / 3;
-            background: #000;
-            border-radius: 0;
-            transform: scaleX(-1); /* mirror preview only */
-            pointer-events: none;
-        }
-
-        .webcam-resize-handle {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 18px;
-            height: 18px;
-            cursor: se-resize;
-            background:
-                linear-gradient(135deg,
-                    transparent 0%, transparent 55%,
-                    #666 55%, #666 65%,
-                    transparent 65%, transparent 75%,
-                    #666 75%, #666 85%,
-                    transparent 85%, transparent 95%,
-                    #666 95%);
-        }
-
-        .webcam-panel.pip-active video { opacity: 0.15; }
-        .webcam-panel.pip-active .pip-placeholder { display: block; }
-
-        .pip-placeholder {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 12px;
-            color: #ccc;
-            background: rgba(0,0,0,0.55);
-            padding: 6px 10px;
-            border-radius: 4px;
-            pointer-events: none;
-            text-align: center;
-            white-space: nowrap;
-        }
-
-        /* Editor toolbar */
-        .editor-toolbar {
-            display: none;
-            margin-top: 12px;
-            margin-bottom: 12px;
-            width: 100%;
-            background: #181818;
-            border: 1px solid #2a2a2a;
-            border-radius: 8px;
-            padding: 10px 12px;
             gap: 10px;
-            flex-wrap: wrap;
-            align-items: center;
         }
 
-        .editor-toolbar.visible { display: flex; }
-
-        .tool-group {
-            display: flex;
-            gap: 4px;
-            padding-right: 10px;
-            margin-right: 2px;
-            border-right: 1px solid #2a2a2a;
-            align-items: center;
-        }
-
-        .tool-group:last-child {
-            border-right: none;
-            padding-right: 0;
-            margin-right: 0;
-            flex: 1;
-            justify-content: flex-end;
-        }
-
-        .tool-btn {
-            padding: 6px 12px;
-            background: #2a2a2a;
-            color: #ccc;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            font-size: 13px;
+        button {
+            padding: 11px 22px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-        }
-
-        .tool-btn:hover { background: #333; }
-
-        .tool-btn.active {
-            background: #dc3545;
             color: #fff;
-            border-color: #dc3545;
+            transition: background 0.15s, opacity 0.15s;
         }
 
-        .tool-btn.primary {
-            background: #28a745;
-            color: #fff;
-        }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .tool-btn.primary:hover:not(:disabled) { background: #218838; }
-        .tool-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #dc3545; }
+        .btn-primary:hover:not(:disabled) { background: #c82333; }
+        .btn-secondary { background: #444; }
+        .btn-secondary:hover:not(:disabled) { background: #555; }
+        .btn-success { background: #28a745; }
+        .btn-success:hover:not(:disabled) { background: #218838; }
 
-        .color-swatch {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid transparent;
-            cursor: pointer;
-            padding: 0;
-        }
-
-        .color-swatch.active {
-            border-color: #fff;
-            transform: scale(1.05);
-        }
-
-        .duration-control {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #aaa;
-            font-size: 12px;
-            cursor: default;
-        }
-
-        .duration-control input[type="range"] { width: 90px; }
-        .duration-value {
-            min-width: 32px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            color: #ddd;
-        }
-
-        .text-editor-pop {
-            position: absolute;
+        .error {
+            color: #ff6b6b;
+            font-size: 13px;
+            background: rgba(220, 53, 69, 0.08);
+            border: 1px solid rgba(220, 53, 69, 0.25);
+            padding: 10px 12px;
+            border-radius: 6px;
             display: none;
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid #555;
-            border-radius: 4px;
-            padding: 6px 8px;
-            z-index: 100;
         }
 
-        .text-editor-pop.visible { display: block; }
+        .error.visible { display: block; }
 
-        .text-editor-pop input {
-            background: transparent;
-            color: #fff;
-            border: none;
-            outline: none;
-            font-size: 16px;
-            min-width: 180px;
-            font-family: inherit;
+        .live-preview canvas,
+        .live-preview video,
+        .preview video {
+            width: 100%;
+            background: #000;
+            border-radius: 8px;
+            display: block;
         }
 
-        .export-status {
-            color: #aaa;
-            font-size: 12px;
-            margin-left: 8px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            min-width: 110px;
-            text-align: right;
+        h2 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
+
+        .downloads {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <h1>gabes screen recorder - test</h1>
-    <p class="subtitle">Record your screen, annotate, and download as MP4</p>
+    <main>
+        <h1>screen recorder</h1>
+        <p class="subtitle">window + audio + webcam, recorded as a single file</p>
 
-    <div class="controls">
-        <div class="audio-toggles">
-            <label class="toggle-label">
-                <input type="checkbox" id="systemAudio" checked>
-                System Audio
-            </label>
-            <label class="toggle-label">
-                <input type="checkbox" id="micAudio">
-                Microphone
-            </label>
-            <label class="toggle-label">
-                <input type="checkbox" id="webcamOverlay">
-                Webcam overlay
-            </label>
-        </div>
+        <section class="toggles">
+            <label class="toggle"><input type="checkbox" id="opt-mic" checked> microphone</label>
+            <label class="toggle"><input type="checkbox" id="opt-sys"> system audio</label>
+            <label class="toggle"><input type="checkbox" id="opt-cam" checked> webcam overlay</label>
+        </section>
 
-        <div class="recording-status" id="recordingStatus"></div>
+        <section class="status">
+            <span class="dot" id="dot"></span>
+            <span id="timer">00:00:00</span>
+        </section>
 
-        <div class="btn-row">
-            <button type="button" class="btn-record" id="btnRecord">Start Recording</button>
-            <button type="button" class="btn-pause" id="btnPause" disabled>Pause</button>
-            <button type="button" class="btn-stop" id="btnStop" disabled>Stop</button>
-        </div>
+        <section class="controls">
+            <button id="btn-start" class="btn-primary">Start recording</button>
+            <button id="btn-stop" class="btn-secondary" disabled>Stop</button>
+        </section>
 
-        <div class="btn-row">
-            <button type="button" class="btn-download" id="btnDownload" disabled>Download Recording</button>
-        </div>
+        <p class="error" id="error"></p>
 
-        <div class="error-message" id="errorMessage"></div>
-    </div>
+        <section class="live-preview hidden" id="live-preview">
+            <h2>recording — live preview</h2>
+            <canvas id="live-canvas"></canvas>
+        </section>
 
-    <div class="webcam-panel" id="webcamPanel">
-        <div class="webcam-drag-bar" id="webcamDragBar">
-            <span>Webcam &mdash; drag to move</span>
-            <button type="button" class="pip-btn" id="btnTogglePip">Pop out</button>
-        </div>
-        <video id="webcamVideo" autoplay muted playsinline></video>
-        <div class="pip-placeholder">Floating in Picture-in-Picture</div>
-        <div class="webcam-resize-handle" id="webcamResizeHandle"></div>
-    </div>
-
-    <div class="preview-section" id="previewSection">
-        <h2>Preview &amp; annotate</h2>
-
-        <div class="editor-toolbar" id="editorToolbar">
-            <div class="tool-group" id="toolButtons">
-                <button class="tool-btn" data-tool="text">Text</button>
-                <button class="tool-btn" data-tool="arrow">Arrow</button>
-                <button class="tool-btn" data-tool="rect">Box</button>
-                <button class="tool-btn" data-tool="highlight">Highlight</button>
-                <button class="tool-btn" data-tool="pen">Pen</button>
+        <section class="preview hidden" id="preview">
+            <h2>recorded</h2>
+            <video id="preview-video" controls></video>
+            <div class="downloads">
+                <button id="btn-dl-webm" class="btn-success">Download .webm</button>
+                <button id="btn-dl-mp4" class="btn-secondary">Download .mp4</button>
             </div>
-
-            <div class="tool-group" id="colorSwatches">
-                <button class="color-swatch active" data-color="#ff3838" style="background:#ff3838" title="Red"></button>
-                <button class="color-swatch" data-color="#ffc107" style="background:#ffc107" title="Yellow"></button>
-                <button class="color-swatch" data-color="#28a745" style="background:#28a745" title="Green"></button>
-                <button class="color-swatch" data-color="#3aa0ff" style="background:#3aa0ff" title="Blue"></button>
-                <button class="color-swatch" data-color="#ffffff" style="background:#ffffff" title="White"></button>
-            </div>
-
-            <div class="tool-group">
-                <label class="duration-control">
-                    Duration
-                    <input type="range" id="durationSlider" min="1" max="15" value="3">
-                    <span class="duration-value" id="durationValue">3s</span>
-                </label>
-            </div>
-
-            <div class="tool-group">
-                <button class="tool-btn" id="btnUndo">Undo</button>
-                <button class="tool-btn" id="btnClearAnn">Clear</button>
-            </div>
-
-            <div class="tool-group">
-                <button class="tool-btn primary" id="btnExportAnn">Export with annotations</button>
-                <span class="export-status" id="exportStatus"></span>
-            </div>
-        </div>
-
-        <div class="preview-wrapper" id="previewWrapper">
-            <video id="previewVideo" controls></video>
-            <canvas id="annotationCanvas"></canvas>
-            <div class="text-editor-pop" id="textEditorPop">
-                <input type="text" id="textEditorInput" placeholder="Type then press Enter">
-            </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
         // ---------- DOM ----------
-        const btnRecord = document.getElementById('btnRecord');
-        const btnPause = document.getElementById('btnPause');
-        const btnStop = document.getElementById('btnStop');
-        const btnDownload = document.getElementById('btnDownload');
-        const systemAudioCheckbox = document.getElementById('systemAudio');
-        const micAudioCheckbox = document.getElementById('micAudio');
-        const webcamOverlayCheckbox = document.getElementById('webcamOverlay');
-        const recordingStatus = document.getElementById('recordingStatus');
-        const previewSection = document.getElementById('previewSection');
-        const previewVideo = document.getElementById('previewVideo');
-        const errorMessage = document.getElementById('errorMessage');
-
-        const webcamPanel = document.getElementById('webcamPanel');
-        const webcamVideo = document.getElementById('webcamVideo');
-        const webcamDragBar = document.getElementById('webcamDragBar');
-        const webcamResizeHandle = document.getElementById('webcamResizeHandle');
-        const btnTogglePip = document.getElementById('btnTogglePip');
-
-        const editorToolbar = document.getElementById('editorToolbar');
-        const annotationCanvas = document.getElementById('annotationCanvas');
-        const annotationCtx = annotationCanvas.getContext('2d');
-        const toolButtons = document.getElementById('toolButtons');
-        const colorSwatches = document.getElementById('colorSwatches');
-        const durationSlider = document.getElementById('durationSlider');
-        const durationValue = document.getElementById('durationValue');
-        const btnUndo = document.getElementById('btnUndo');
-        const btnClearAnn = document.getElementById('btnClearAnn');
-        const btnExportAnn = document.getElementById('btnExportAnn');
-        const exportStatus = document.getElementById('exportStatus');
-        const textEditorPop = document.getElementById('textEditorPop');
-        const textEditorInput = document.getElementById('textEditorInput');
+        const $ = function(id) { return document.getElementById(id); };
+        const ui = {
+            optMic: $('opt-mic'),
+            optSys: $('opt-sys'),
+            optCam: $('opt-cam'),
+            btnStart: $('btn-start'),
+            btnStop: $('btn-stop'),
+            dot: $('dot'),
+            timer: $('timer'),
+            error: $('error'),
+            livePreview: $('live-preview'),
+            liveCanvas: $('live-canvas'),
+            preview: $('preview'),
+            previewVideo: $('preview-video'),
+            btnDlWebm: $('btn-dl-webm'),
+            btnDlMp4: $('btn-dl-mp4'),
+        };
 
         // ---------- State ----------
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let recordingBlob = null;
-        let recordingMimeType = 'video/webm';
-        let timerInterval = null;
-        let elapsedSeconds = 0;
         let screenStream = null;
         let micStream = null;
         let webcamStream = null;
-        let combinedStream = null;
         let audioCtx = null;
         let audioDest = null;
-        let previewObjectUrl = null;
 
-        // Annotations are stored in NORMALIZED (0-1) coords so the same array
-        // renders correctly at preview size AND at the full video resolution
-        // used by the export pipeline.
-        let annotations = [];
-        let selectedTool = null;
-        let selectedColor = '#ff3838';
-        let defaultDuration = 3;
-        let drawingAnn = null;
-        let rafId = null;
+        let screenVideo = null;
+        let webcamVideo = null;
+        let canvas = null;
+        let ctx = null;
+
+        let recorder = null;
+        let chunks = [];
+        let recordedBlob = null;
+        let recordedMimeType = '';
+        let canvasStream = null;
+
+        let drawHandle = null;
+        let lastDrawTime = 0;
+        const DRAW_FPS = 30;
+
+        let timerHandle = null;
+        let elapsedSeconds = 0;
+
+        let previewObjectUrl = null;
 
         // ---------- Utilities ----------
         function showError(msg) {
-            errorMessage.textContent = msg;
-            errorMessage.classList.add('visible');
+            ui.error.textContent = msg;
+            ui.error.classList.add('visible');
         }
 
         function clearError() {
-            errorMessage.textContent = '';
-            errorMessage.classList.remove('visible');
+            ui.error.textContent = '';
+            ui.error.classList.remove('visible');
         }
 
-        function formatTime(totalSeconds) {
-            const hrs = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-            const mins = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-            const secs = (totalSeconds % 60).toString().padStart(2, '0');
-            return `${hrs}:${mins}:${secs}`;
+        function formatTime(s) {
+            const hrs = Math.floor(s / 3600).toString().padStart(2, '0');
+            const mins = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+            const secs = (s % 60).toString().padStart(2, '0');
+            return hrs + ':' + mins + ':' + secs;
         }
 
-        function startTimer() {
-            elapsedSeconds = 0;
-            timerInterval = setInterval(function() {
-                elapsedSeconds++;
-                const timerEl = document.querySelector('.timer');
-                if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
-            }, 1000);
-        }
-
-        function stopTimer() {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-
-        function pickRecorderMimeType() {
-            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,opus')) return 'video/mp4;codecs=avc1,opus';
-            if (MediaRecorder.isTypeSupported('video/mp4')) return 'video/mp4';
-            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) return 'video/webm;codecs=vp9,opus';
+        function pickWebmMime() {
+            const candidates = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+            ];
+            for (let i = 0; i < candidates.length; i++) {
+                if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+            }
             return 'video/webm';
         }
 
-        function setRecordingUI(state) {
-            if (state === 'recording') {
-                recordingStatus.innerHTML = '<div class="red-dot"></div><span class="timer">00:00:00</span>';
-                btnRecord.disabled = true;
-                btnPause.disabled = false;
-                btnStop.disabled = false;
-                btnDownload.disabled = true;
-                systemAudioCheckbox.disabled = true;
-                micAudioCheckbox.disabled = true;
-                webcamOverlayCheckbox.disabled = true;
-                previewSection.classList.remove('visible');
-                editorToolbar.classList.remove('visible');
-            } else if (state === 'paused') {
-                var dot = document.querySelector('.red-dot');
-                if (dot) dot.classList.add('paused-indicator');
-                btnPause.textContent = 'Resume';
-            } else if (state === 'resumed') {
-                var dot = document.querySelector('.red-dot');
-                if (dot) dot.classList.remove('paused-indicator');
-                btnPause.textContent = 'Pause';
-            } else if (state === 'stopped') {
-                recordingStatus.innerHTML = '';
-                btnRecord.disabled = false;
-                btnPause.disabled = true;
-                btnPause.textContent = 'Pause';
-                btnStop.disabled = true;
-                systemAudioCheckbox.disabled = false;
-                micAudioCheckbox.disabled = false;
-                webcamOverlayCheckbox.disabled = false;
+        function createMediaRecorder(stream) {
+            const mimeType = pickWebmMime();
+            try {
+                recordedMimeType = mimeType;
+                return new MediaRecorder(stream, { mimeType: mimeType });
+            } catch (_) {
+                recordedMimeType = '';
+                return new MediaRecorder(stream);
             }
         }
 
-        // ---------- Webcam overlay ----------
-        function setupWebcam() {
-            return navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 640 }, height: { ideal: 480 } }
-            }).then(function(stream) {
-                webcamStream = stream;
-                webcamVideo.srcObject = stream;
-                webcamPanel.classList.add('visible');
-                return webcamVideo.play().catch(function() {});
-            }).then(function() {
-                if (document.pictureInPictureEnabled && !webcamVideo.disablePictureInPicture) {
-                    return webcamVideo.requestPictureInPicture().catch(function(err) {
-                        console.warn('Auto Picture-in-Picture failed; use the Pop out button:', err);
-                    });
-                }
-            }).catch(function(err) {
-                console.warn('Webcam access failed:', err);
-                showError('Webcam access denied: ' + err.message);
-                webcamStream = null;
-            });
+        function timestampedName(ext) {
+            const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            return 'recording-' + ts + '.' + ext;
         }
 
-        function teardownWebcam() {
-            if (document.pictureInPictureElement === webcamVideo) {
-                document.exitPictureInPicture().catch(function() {});
-            }
-            webcamPanel.classList.remove('visible');
-            webcamPanel.classList.remove('pip-active');
-            if (webcamStream) {
-                webcamStream.getTracks().forEach(function(t) { t.stop(); });
-                webcamStream = null;
-            }
-            webcamVideo.srcObject = null;
+        function saveBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
-        webcamVideo.addEventListener('enterpictureinpicture', function() {
-            webcamPanel.classList.add('pip-active');
-            btnTogglePip.textContent = 'Bring back';
-        });
+        function requireCaptureSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                throw new Error('Screen recording is not available in this browser. Use Chrome, Edge, or Firefox from a secure page.');
+            }
+            if (!window.MediaRecorder) {
+                throw new Error('MediaRecorder is not available in this browser.');
+            }
+            if (!HTMLCanvasElement.prototype.captureStream) {
+                throw new Error('Canvas capture is not available in this browser.');
+            }
+        }
 
-        webcamVideo.addEventListener('leavepictureinpicture', function() {
-            webcamPanel.classList.remove('pip-active');
-            btnTogglePip.textContent = 'Pop out';
-        });
+        async function prepareVideo(video, stream) {
+            video.srcObject = stream;
+            video.muted = true;
+            video.playsInline = true;
 
-        btnTogglePip.onclick = function() {
-            if (!webcamStream) return;
-            if (document.pictureInPictureElement === webcamVideo) {
-                document.exitPictureInPicture().catch(function(err) {
-                    console.warn('exitPictureInPicture failed:', err);
-                });
-            } else {
-                webcamVideo.requestPictureInPicture().catch(function(err) {
-                    showError('Picture-in-Picture failed: ' + err.message);
+            if (!video.videoWidth || !video.videoHeight) {
+                await new Promise(function(resolve, reject) {
+                    const timeout = setTimeout(function() {
+                        cleanup();
+                        resolve();
+                    }, 2500);
+                    function cleanup() {
+                        clearTimeout(timeout);
+                        video.removeEventListener('loadedmetadata', onLoaded);
+                        video.removeEventListener('error', onError);
+                    }
+                    function onLoaded() {
+                        cleanup();
+                        resolve();
+                    }
+                    function onError() {
+                        cleanup();
+                        reject(new Error('Could not read video metadata.'));
+                    }
+                    video.addEventListener('loadedmetadata', onLoaded, { once: true });
+                    video.addEventListener('error', onError, { once: true });
                 });
             }
-        };
 
-        // Pointer events (not mouse) so drag/resize work with trackpad/touch and
-        // capture survives a fast drag that briefly leaves the element.
-        (function enableWebcamDragging() {
-            let dragging = false;
-            let offsetX = 0;
-            let offsetY = 0;
-
-            webcamDragBar.addEventListener('pointerdown', function(e) {
-                if (e.target.tagName === 'BUTTON') return;
-                dragging = true;
-                const rect = webcamPanel.getBoundingClientRect();
-                offsetX = e.clientX - rect.left;
-                offsetY = e.clientY - rect.top;
-                webcamDragBar.setPointerCapture(e.pointerId);
-                e.preventDefault();
-            });
-
-            webcamDragBar.addEventListener('pointermove', function(e) {
-                if (!dragging) return;
-                const newLeft = Math.max(0, Math.min(window.innerWidth - 60, e.clientX - offsetX));
-                const newTop = Math.max(0, Math.min(window.innerHeight - 40, e.clientY - offsetY));
-                webcamPanel.style.left = newLeft + 'px';
-                webcamPanel.style.top = newTop + 'px';
-                webcamPanel.style.right = 'auto';
-            });
-
-            webcamDragBar.addEventListener('pointerup', function(e) {
-                dragging = false;
-                try { webcamDragBar.releasePointerCapture(e.pointerId); } catch (_) {}
-            });
-        })();
-
-        (function enableWebcamResizing() {
-            let resizing = false;
-            let startWidth = 0;
-            let startX = 0;
-
-            webcamResizeHandle.addEventListener('pointerdown', function(e) {
-                resizing = true;
-                startWidth = webcamPanel.getBoundingClientRect().width;
-                startX = e.clientX;
-                webcamResizeHandle.setPointerCapture(e.pointerId);
-                e.preventDefault();
-                e.stopPropagation();
-            });
-
-            webcamResizeHandle.addEventListener('pointermove', function(e) {
-                if (!resizing) return;
-                const newWidth = Math.max(160, Math.min(720, startWidth + (e.clientX - startX)));
-                webcamPanel.style.width = newWidth + 'px';
-            });
-
-            webcamResizeHandle.addEventListener('pointerup', function(e) {
-                resizing = false;
-                try { webcamResizeHandle.releasePointerCapture(e.pointerId); } catch (_) {}
-            });
-        })();
-
-        // ---------- Recording flow ----------
-        function startRecording() {
-            clearError();
-            recordedChunks = [];
-            recordingBlob = null;
-
-            // Tear down any prior preview so we don't leak the blob URL.
-            annotations = [];
-            selectTool(null);
-            editorToolbar.classList.remove('visible');
-            previewSection.classList.remove('visible');
-            if (previewObjectUrl) {
-                URL.revokeObjectURL(previewObjectUrl);
-                previewObjectUrl = null;
-            }
-            previewVideo.removeAttribute('src');
-            previewVideo.load();
-
-            var displayMediaOptions = {
-                video: true,
-                audio: systemAudioCheckbox.checked
-            };
-
-            navigator.mediaDevices.getDisplayMedia(displayMediaOptions).then(function(stream) {
-                screenStream = stream;
-                var pending = [];
-
-                if (micAudioCheckbox.checked) {
-                    pending.push(
-                        navigator.mediaDevices.getUserMedia({ audio: true })
-                            .then(function(mic) { micStream = mic; })
-                            .catch(function(err) {
-                                console.warn('Microphone access denied:', err);
-                                micStream = null;
-                            })
-                    );
-                }
-
-                if (webcamOverlayCheckbox.checked) {
-                    pending.push(setupWebcam());
-                }
-
-                return Promise.all(pending).then(beginRecording);
-            }).catch(function(err) {
-                if (err.name === 'NotAllowedError') {
-                    showError('Screen sharing was cancelled.');
-                } else {
-                    showError('Failed to access screen: ' + err.message);
-                }
-                console.error('getDisplayMedia error:', err);
-                stopAllStreams();
-            });
+            await video.play();
         }
 
-        // MediaRecorder only encodes the FIRST audio track of its source stream,
-        // so when System Audio + Mic are both on we mix them through WebAudio.
+        // ---------- Stream acquisition ----------
+        // Requests screen first (the user-visible browser picker), then optionally
+        // mic and webcam in parallel. Each optional source is independently
+        // permitted; a denied webcam doesn't abort the recording.
+        async function acquireStreams() {
+            requireCaptureSupport();
+
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: 30 },
+                audio: ui.optSys.checked,
+            });
+
+            const pending = [];
+
+            if (ui.optMic.checked) {
+                pending.push(
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(function(s) { micStream = s; })
+                        .catch(function(err) { console.warn('Mic denied:', err); micStream = null; })
+                );
+            }
+
+            if (ui.optCam.checked) {
+                pending.push(
+                    navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+                    })
+                        .then(function(s) { webcamStream = s; })
+                        .catch(function(err) { console.warn('Webcam denied:', err); webcamStream = null; })
+                );
+            }
+
+            await Promise.all(pending);
+        }
+
+        // ---------- Audio mixing ----------
+        // MediaRecorder only encodes the first audio track of its source stream,
+        // so when system audio + mic are both present we mix them in WebAudio.
         function buildMixedAudioTrack() {
-            var screenAudio = screenStream ? screenStream.getAudioTracks() : [];
-            var micAudio = micStream ? micStream.getAudioTracks() : [];
-
-            var sources = [];
-            if (screenAudio.length > 0) sources.push(screenStream);
-            if (micAudio.length > 0) sources.push(micStream);
+            const sources = [];
+            if (screenStream && screenStream.getAudioTracks().length > 0) sources.push(screenStream);
+            if (micStream && micStream.getAudioTracks().length > 0) sources.push(micStream);
 
             if (sources.length === 0) return null;
             if (sources.length === 1) return sources[0].getAudioTracks()[0];
@@ -817,543 +402,315 @@
             return audioDest.stream.getAudioTracks()[0];
         }
 
-        function beginRecording() {
-            var tracks = [];
-            var videoTrack = screenStream.getVideoTracks()[0];
-            tracks.push(videoTrack);
+        // ---------- Canvas compositing ----------
+        // Drawing the screen + webcam onto a canvas (and recording the canvas's
+        // captureStream) bakes the webcam into the recorded frames regardless of
+        // what the user shared with getDisplayMedia. No reliance on PiP being
+        // visible to the screen-capture surface.
+        async function setupCompositor() {
+            screenVideo = document.createElement('video');
+            await prepareVideo(screenVideo, screenStream);
 
-            var mixedAudio = buildMixedAudioTrack();
-            if (mixedAudio) tracks.push(mixedAudio);
+            if (webcamStream) {
+                webcamVideo = document.createElement('video');
+                await prepareVideo(webcamVideo, webcamStream);
+            }
 
-            combinedStream = new MediaStream(tracks);
-            recordingMimeType = pickRecorderMimeType();
-            console.log('Recording with mime type:', recordingMimeType);
+            const videoTrack = screenStream.getVideoTracks()[0];
+            const settings = videoTrack ? videoTrack.getSettings() : {};
+            const width = screenVideo.videoWidth || settings.width || 1280;
+            const height = screenVideo.videoHeight || settings.height || 720;
 
-            mediaRecorder = new MediaRecorder(combinedStream, { mimeType: recordingMimeType });
+            canvas = ui.liveCanvas;
+            canvas.width = width;
+            canvas.height = height;
+            ctx = canvas.getContext('2d', { alpha: false });
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            mediaRecorder.ondataavailable = function(event) {
-                if (event.data.size > 0) recordedChunks.push(event.data);
-            };
-
-            mediaRecorder.onerror = function(e) {
-                console.error('MediaRecorder error:', e);
-                showError('Recording error: ' + ((e.error && e.error.message) || 'unknown'));
-            };
-
-            mediaRecorder.onstop = function() {
-                stopTimer();
-                setRecordingUI('stopped');
-                stopAllStreams();
-
-                recordingBlob = new Blob(recordedChunks, { type: recordingMimeType });
-                previewObjectUrl = URL.createObjectURL(recordingBlob);
-                previewVideo.src = previewObjectUrl;
-                previewSection.classList.add('visible');
-                editorToolbar.classList.add('visible');
-                btnDownload.disabled = false;
-                btnExportAnn.disabled = false;
-            };
-
-            videoTrack.onended = function() {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                }
-            };
-
-            mediaRecorder.start(1000);
-            setRecordingUI('recording');
-            startTimer();
+            canvasStream = canvas.captureStream(DRAW_FPS);
         }
 
-        function pauseRecording() {
-            if (!mediaRecorder) return;
+        function drawFrame(now) {
+            if (now - lastDrawTime >= 1000 / DRAW_FPS) {
+                lastDrawTime = now;
+                if (screenVideo && screenVideo.readyState >= 2) {
+                    ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
+                }
+                if (webcamVideo && webcamVideo.readyState >= 2) {
+                    drawWebcamOverlay();
+                }
+            }
+            drawHandle = requestAnimationFrame(drawFrame);
+        }
 
-            if (mediaRecorder.state === 'recording') {
-                mediaRecorder.pause();
-                stopTimer();
-                setRecordingUI('paused');
-            } else if (mediaRecorder.state === 'paused') {
-                mediaRecorder.resume();
-                timerInterval = setInterval(function() {
-                    elapsedSeconds++;
-                    var timerEl = document.querySelector('.timer');
-                    if (timerEl) timerEl.textContent = formatTime(elapsedSeconds);
-                }, 1000);
-                setRecordingUI('resumed');
+        function drawWebcamOverlay() {
+            const W = canvas.width;
+            const H = canvas.height;
+            const wcW = Math.round(W * 0.18);
+            const wcH = Math.round(wcW * 0.75); // 4:3
+            const margin = Math.round(W * 0.012);
+            const x = W - wcW - margin;
+            const y = H - wcH - margin;
+            const r = Math.round(wcW * 0.04);
+
+            ctx.save();
+            ctx.beginPath();
+            roundedRectPath(ctx, x, y, wcW, wcH, r);
+            ctx.clip();
+            // Fill backdrop so transparent edges from rounding look clean.
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x, y, wcW, wcH);
+            ctx.drawImage(webcamVideo, x, y, wcW, wcH);
+            ctx.restore();
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.lineWidth = Math.max(2, Math.round(wcW * 0.012));
+            ctx.beginPath();
+            roundedRectPath(ctx, x, y, wcW, wcH, r);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function roundedRectPath(ctx, x, y, w, h, r) {
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        // ---------- Timer ----------
+        function startTimer() {
+            elapsedSeconds = 0;
+            ui.timer.textContent = formatTime(0);
+            timerHandle = setInterval(function() {
+                elapsedSeconds++;
+                ui.timer.textContent = formatTime(elapsedSeconds);
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerHandle) clearInterval(timerHandle);
+            timerHandle = null;
+        }
+
+        // ---------- Recording lifecycle ----------
+        async function startRecording() {
+            clearError();
+            ui.btnStart.disabled = true;
+            ui.btnStart.textContent = 'Starting…';
+            ui.btnStop.disabled = true;
+
+            // Tear down any prior preview
+            ui.preview.classList.add('hidden');
+            if (previewObjectUrl) { URL.revokeObjectURL(previewObjectUrl); previewObjectUrl = null; }
+            ui.previewVideo.removeAttribute('src');
+            ui.previewVideo.load();
+            chunks = [];
+            recordedBlob = null;
+
+            try {
+                await acquireStreams();
+                await setupCompositor();
+
+                const tracks = [];
+                tracks.push(canvasStream.getVideoTracks()[0]);
+                const audioTrack = buildMixedAudioTrack();
+                if (audioTrack) tracks.push(audioTrack);
+
+                const recordStream = new MediaStream(tracks);
+                recorder = createMediaRecorder(recordStream);
+
+                recorder.ondataavailable = function(e) {
+                    if (e.data.size > 0) chunks.push(e.data);
+                };
+                recorder.onerror = function(e) {
+                    showError('Recorder error: ' + ((e.error && e.error.message) || 'unknown'));
+                };
+                recorder.onstop = onRecordingStopped;
+
+                // User clicked the browser's "Stop sharing" bar → stop the recorder
+                screenStream.getVideoTracks()[0].addEventListener('ended', function() {
+                    if (recorder.state !== 'inactive') recorder.stop();
+                });
+
+                drawFrame(performance.now());
+                drawHandle = requestAnimationFrame(drawFrame);
+                recorder.start(1000);
+                startTimer();
+
+                ui.dot.classList.add('recording');
+                ui.btnStart.textContent = 'Start recording';
+                ui.btnStop.disabled = false;
+                ui.livePreview.classList.remove('hidden');
+            } catch (err) {
+                const msg = err && err.name === 'NotAllowedError'
+                    ? 'Screen share cancelled.'
+                    : 'Could not start: ' + (err && err.message ? err.message : 'unknown');
+                showError(msg);
+                console.error('startRecording failed:', err);
+                cleanupStreams();
+                ui.btnStart.disabled = false;
+                ui.btnStart.textContent = 'Start recording';
+                ui.btnStop.disabled = true;
+                ui.btnStop.textContent = 'Stop';
             }
         }
 
         function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
+            ui.btnStop.disabled = true;
+            ui.btnStop.textContent = 'Stopping…';
+            if (recorder && recorder.state !== 'inactive') {
+                recorder.stop();
+            } else {
+                onRecordingStopped();
             }
         }
 
-        function stopAllStreams() {
-            if (screenStream) {
-                screenStream.getTracks().forEach(function(t) { t.stop(); });
-                screenStream = null;
+        function onRecordingStopped() {
+            if (drawHandle) { cancelAnimationFrame(drawHandle); drawHandle = null; }
+            stopTimer();
+
+            recordedBlob = new Blob(chunks, { type: recordedMimeType });
+            if (recordedBlob.size > 0) {
+                previewObjectUrl = URL.createObjectURL(recordedBlob);
+                ui.previewVideo.src = previewObjectUrl;
+                ui.preview.classList.remove('hidden');
+                ui.btnDlWebm.disabled = false;
+                ui.btnDlMp4.disabled = false;
+            } else {
+                showError('Recording stopped before any video data was captured.');
+                ui.btnDlWebm.disabled = true;
+                ui.btnDlMp4.disabled = true;
             }
-            if (micStream) {
-                micStream.getTracks().forEach(function(t) { t.stop(); });
-                micStream = null;
+            ui.livePreview.classList.add('hidden');
+
+            ui.dot.classList.remove('recording');
+            ui.btnStart.disabled = false;
+            ui.btnStart.textContent = 'Start recording';
+            ui.btnStop.disabled = true;
+            ui.btnStop.textContent = 'Stop';
+
+            ui.btnDlWebm.textContent = 'Download .webm';
+            ui.btnDlMp4.textContent = 'Download .mp4';
+
+            cleanupStreams();
+            recorder = null;
+        }
+
+        function cleanupStreams() {
+            [screenStream, micStream, webcamStream].forEach(function(s) {
+                if (s) s.getTracks().forEach(function(t) { t.stop(); });
+            });
+            screenStream = micStream = webcamStream = null;
+
+            if (screenVideo) { screenVideo.srcObject = null; screenVideo = null; }
+            if (webcamVideo) { webcamVideo.srcObject = null; webcamVideo = null; }
+            if (canvasStream) {
+                canvasStream.getTracks().forEach(function(t) { t.stop(); });
+                canvasStream = null;
             }
-            teardownWebcam();
             if (audioCtx) {
                 audioCtx.close().catch(function() {});
                 audioCtx = null;
                 audioDest = null;
             }
-            combinedStream = null;
+            lastDrawTime = 0;
         }
 
-        function downloadRecording() {
-            if (!recordingBlob) return;
-            var ext = recordingMimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-            var timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            var filename = 'recording-' + timestamp + '.' + ext;
-
-            var url = URL.createObjectURL(recordingBlob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        // ---------- Downloads ----------
+        function downloadWebm() {
+            if (!recordedBlob) return;
+            saveBlob(recordedBlob, timestampedName('webm'));
         }
 
-        btnRecord.onclick = startRecording;
-        btnPause.onclick = pauseRecording;
-        btnStop.onclick = stopRecording;
-        btnDownload.onclick = downloadRecording;
-
-        // ===========================================================
-        //                      Annotation editor
-        // ===========================================================
-
-        function selectTool(tool) {
-            selectedTool = tool;
-            Array.prototype.forEach.call(toolButtons.children, function(btn) {
-                if (btn.dataset.tool === tool) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-            if (tool) annotationCanvas.classList.add('tool-active');
-            else annotationCanvas.classList.remove('tool-active');
-            hideTextEditor();
-        }
-
-        function selectColor(color) {
-            selectedColor = color;
-            Array.prototype.forEach.call(colorSwatches.children, function(btn) {
-                if (btn.dataset.color === color) btn.classList.add('active');
-                else btn.classList.remove('active');
-            });
-        }
-
-        function resizeAnnotationCanvas() {
-            var rect = previewVideo.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) return;
-            var dpr = window.devicePixelRatio || 1;
-            annotationCanvas.style.width = rect.width + 'px';
-            annotationCanvas.style.height = rect.height + 'px';
-            annotationCanvas.width = Math.round(rect.width * dpr);
-            annotationCanvas.height = Math.round(rect.height * dpr);
-            annotationCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        }
-
-        function getCanvasPoint(e) {
-            var rect = annotationCanvas.getBoundingClientRect();
-            return {
-                x: (e.clientX - rect.left) / rect.width,
-                y: (e.clientY - rect.top) / rect.height
-            };
-        }
-
-        function genId() {
-            return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-        }
-
-        function onCanvasPointerDown(e) {
-            if (!selectedTool) return;
-            annotationCanvas.setPointerCapture(e.pointerId);
-            var p = getCanvasPoint(e);
-            var t = previewVideo.currentTime;
-
-            if (selectedTool === 'text') {
-                openTextEditor(p.x, p.y, t);
-                return;
-            }
-
-            drawingAnn = {
-                id: genId(),
-                type: selectedTool,
-                color: selectedColor,
-                startTime: t,
-                endTime: t + defaultDuration
-            };
-
-            if (selectedTool === 'arrow') {
-                drawingAnn.x1 = p.x; drawingAnn.y1 = p.y;
-                drawingAnn.x2 = p.x; drawingAnn.y2 = p.y;
-            } else if (selectedTool === 'rect' || selectedTool === 'highlight') {
-                drawingAnn.x = p.x; drawingAnn.y = p.y;
-                drawingAnn.width = 0; drawingAnn.height = 0;
-                drawingAnn._sx = p.x; drawingAnn._sy = p.y;
-            } else if (selectedTool === 'pen') {
-                drawingAnn.points = [p];
-            }
-            renderPreviewFrame();
-        }
-
-        function onCanvasPointerMove(e) {
-            if (!drawingAnn) return;
-            var p = getCanvasPoint(e);
-
-            if (drawingAnn.type === 'arrow') {
-                drawingAnn.x2 = p.x; drawingAnn.y2 = p.y;
-            } else if (drawingAnn.type === 'rect' || drawingAnn.type === 'highlight') {
-                drawingAnn.x = Math.min(drawingAnn._sx, p.x);
-                drawingAnn.y = Math.min(drawingAnn._sy, p.y);
-                drawingAnn.width = Math.abs(p.x - drawingAnn._sx);
-                drawingAnn.height = Math.abs(p.y - drawingAnn._sy);
-            } else if (drawingAnn.type === 'pen') {
-                drawingAnn.points.push(p);
-            }
-            renderPreviewFrame();
-        }
-
-        function onCanvasPointerUp(e) {
-            if (!drawingAnn) return;
-            try { annotationCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
-
-            // Drop accidental zero-size annotations from a stray click
-            if (drawingAnn.type === 'rect' || drawingAnn.type === 'highlight') {
-                if (drawingAnn.width < 0.005 || drawingAnn.height < 0.005) {
-                    drawingAnn = null; renderPreviewFrame(); return;
-                }
-                delete drawingAnn._sx; delete drawingAnn._sy;
-            } else if (drawingAnn.type === 'arrow') {
-                var dx = drawingAnn.x2 - drawingAnn.x1;
-                var dy = drawingAnn.y2 - drawingAnn.y1;
-                if (Math.sqrt(dx*dx + dy*dy) < 0.01) {
-                    drawingAnn = null; renderPreviewFrame(); return;
-                }
-            } else if (drawingAnn.type === 'pen') {
-                if (drawingAnn.points.length < 2) {
-                    drawingAnn = null; renderPreviewFrame(); return;
-                }
-            }
-            annotations.push(drawingAnn);
-            drawingAnn = null;
-            renderPreviewFrame();
-        }
-
-        function openTextEditor(nx, ny, t) {
-            var wrapperRect = textEditorPop.offsetParent.getBoundingClientRect();
-            var videoRect = previewVideo.getBoundingClientRect();
-            textEditorPop.style.left = (videoRect.left - wrapperRect.left + nx * videoRect.width) + 'px';
-            textEditorPop.style.top = (videoRect.top - wrapperRect.top + ny * videoRect.height) + 'px';
-            textEditorPop.classList.add('visible');
-            textEditorInput.value = '';
-            textEditorInput.focus();
-            textEditorPop._x = nx;
-            textEditorPop._y = ny;
-            textEditorPop._t = t;
-        }
-
-        function commitTextAnnotation() {
-            var txt = textEditorInput.value.trim();
-            if (!txt) { hideTextEditor(); return; }
-            annotations.push({
-                id: genId(),
-                type: 'text',
-                color: selectedColor,
-                startTime: textEditorPop._t,
-                endTime: textEditorPop._t + defaultDuration,
-                x: textEditorPop._x,
-                y: textEditorPop._y,
-                text: txt
-            });
-            hideTextEditor();
-            renderPreviewFrame();
-        }
-
-        function hideTextEditor() {
-            textEditorPop.classList.remove('visible');
-            textEditorInput.value = '';
-        }
-
-        function undoLastAnnotation() {
-            annotations.pop();
-            renderPreviewFrame();
-        }
-
-        function clearAnnotations() {
-            annotations = [];
-            renderPreviewFrame();
-        }
-
-        function renderPreviewFrame() {
-            var rect = previewVideo.getBoundingClientRect();
-            if (rect.width === 0 || rect.height === 0) return;
-            annotationCtx.clearRect(0, 0, rect.width, rect.height);
-            var t = previewVideo.currentTime;
-            for (var i = 0; i < annotations.length; i++) {
-                var a = annotations[i];
-                if (t >= a.startTime && t <= a.endTime) {
-                    drawAnnotation(annotationCtx, a, rect.width, rect.height);
-                }
-            }
-            if (drawingAnn) drawAnnotation(annotationCtx, drawingAnn, rect.width, rect.height);
-        }
-
-        function drawAnnotation(ctx, a, w, h) {
-            ctx.save();
-            ctx.strokeStyle = a.color;
-            ctx.fillStyle = a.color;
-            ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.005);
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-
-            if (a.type === 'rect') {
-                ctx.strokeRect(a.x * w, a.y * h, a.width * w, a.height * h);
-            } else if (a.type === 'highlight') {
-                ctx.globalAlpha = 0.3;
-                ctx.fillRect(a.x * w, a.y * h, a.width * w, a.height * h);
-            } else if (a.type === 'arrow') {
-                drawArrow(ctx, a.x1 * w, a.y1 * h, a.x2 * w, a.y2 * h);
-            } else if (a.type === 'text') {
-                var fontSize = Math.max(14, h * 0.04);
-                ctx.font = '600 ' + fontSize + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-                ctx.textBaseline = 'top';
-                var metrics = ctx.measureText(a.text);
-                ctx.globalAlpha = 0.55;
-                ctx.fillStyle = '#000';
-                ctx.fillRect(a.x * w - 4, a.y * h - 2, metrics.width + 8, fontSize + 6);
-                ctx.globalAlpha = 1;
-                ctx.fillStyle = a.color;
-                ctx.fillText(a.text, a.x * w, a.y * h);
-            } else if (a.type === 'pen') {
-                ctx.beginPath();
-                for (var i = 0; i < a.points.length; i++) {
-                    var p = a.points[i];
-                    if (i === 0) ctx.moveTo(p.x * w, p.y * h);
-                    else ctx.lineTo(p.x * w, p.y * h);
-                }
-                ctx.stroke();
-            }
-            ctx.restore();
-        }
-
-        function drawArrow(ctx, x1, y1, x2, y2) {
-            var headLen = Math.max(12, ctx.lineWidth * 5);
-            var angle = Math.atan2(y2 - y1, x2 - x1);
-            // shaft
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2 - headLen * 0.6 * Math.cos(angle), y2 - headLen * 0.6 * Math.sin(angle));
-            ctx.stroke();
-            // head
-            ctx.beginPath();
-            ctx.moveTo(x2, y2);
-            ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
-            ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        function startPreviewRenderLoop() {
-            if (rafId) return;
-            (function loop() {
-                renderPreviewFrame();
-                rafId = requestAnimationFrame(loop);
-            })();
-        }
-
-        function stopPreviewRenderLoop() {
-            if (rafId) {
-                cancelAnimationFrame(rafId);
-                rafId = null;
-            }
-            renderPreviewFrame();
-        }
-
-        // ---------- Export pipeline ----------
-        // Plays the recorded video into an offscreen canvas at native resolution,
-        // draws each annotation while its time window is active, and records the
-        // canvas + the video's audio with a fresh MediaRecorder. Real-time speed
-        // (a 5-min recording takes ~5 min to re-encode) - the browser doesn't
-        // expose a faster path without WebCodecs.
-        function exportWithAnnotations() {
-            if (!recordingBlob) return;
-
-            btnExportAnn.disabled = true;
-            exportStatus.textContent = 'Preparing...';
-
-            var exportVideo = document.createElement('video');
-            exportVideo.muted = false;
-            exportVideo.playsInline = true;
-            exportVideo.src = URL.createObjectURL(recordingBlob);
-
-            function fail(msg) {
-                console.error(msg);
-                exportStatus.textContent = msg;
-                btnExportAnn.disabled = false;
-                URL.revokeObjectURL(exportVideo.src);
-            }
-
-            exportVideo.addEventListener('loadedmetadata', function() {
-                var w = exportVideo.videoWidth;
-                var h = exportVideo.videoHeight;
-                if (!w || !h) { fail('Export failed: missing video dimensions'); return; }
-
-                var exportCanvas = document.createElement('canvas');
-                exportCanvas.width = w;
-                exportCanvas.height = h;
-                var exportCtx = exportCanvas.getContext('2d');
-
-                var canvasStream = exportCanvas.captureStream(30);
-
-                var sourceStream = null;
-                if (exportVideo.captureStream) sourceStream = exportVideo.captureStream();
-                else if (exportVideo.mozCaptureStream) sourceStream = exportVideo.mozCaptureStream();
-
-                var outStream = new MediaStream();
-                canvasStream.getVideoTracks().forEach(function(t) { outStream.addTrack(t); });
-                if (sourceStream) {
-                    sourceStream.getAudioTracks().forEach(function(t) { outStream.addTrack(t); });
-                }
-
-                var mimeType = pickRecorderMimeType();
-                var exportRecorder;
-                try {
-                    exportRecorder = new MediaRecorder(outStream, { mimeType: mimeType });
-                } catch (err) {
-                    fail('Export failed: ' + err.message);
-                    return;
-                }
-                var exportChunks = [];
-                exportRecorder.ondataavailable = function(e) {
-                    if (e.data.size > 0) exportChunks.push(e.data);
-                };
-
-                var renderFrameId = null;
-                function drawFrame() {
-                    exportCtx.drawImage(exportVideo, 0, 0, w, h);
-                    var t = exportVideo.currentTime;
-                    for (var i = 0; i < annotations.length; i++) {
-                        var a = annotations[i];
-                        if (t >= a.startTime && t <= a.endTime) {
-                            drawAnnotation(exportCtx, a, w, h);
-                        }
-                    }
-                    var pct = Math.min(100, Math.floor(100 * t / Math.max(0.01, exportVideo.duration || 1)));
-                    exportStatus.textContent = 'Exporting... ' + pct + '%';
-                    if (!exportVideo.ended) {
-                        renderFrameId = requestAnimationFrame(drawFrame);
-                    }
-                }
-
-                exportRecorder.onstop = function() {
-                    if (renderFrameId) cancelAnimationFrame(renderFrameId);
-                    var blob = new Blob(exportChunks, { type: mimeType });
-                    var ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-                    var timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                    var filename = 'recording-annotated-' + timestamp + '.' + ext;
-                    var url = URL.createObjectURL(blob);
-                    var aEl = document.createElement('a');
-                    aEl.href = url;
-                    aEl.download = filename;
-                    document.body.appendChild(aEl);
-                    aEl.click();
-                    document.body.removeChild(aEl);
-                    URL.revokeObjectURL(url);
-                    URL.revokeObjectURL(exportVideo.src);
-                    exportStatus.textContent = 'Done.';
-                    btnExportAnn.disabled = false;
-                    setTimeout(function() { exportStatus.textContent = ''; }, 4000);
-                };
-
-                exportRecorder.onerror = function(e) {
-                    fail('Export recorder error: ' + ((e.error && e.error.message) || 'unknown'));
-                };
-
-                exportVideo.onended = function() {
-                    if (exportRecorder.state !== 'inactive') exportRecorder.stop();
-                };
-
-                exportVideo.currentTime = 0;
-                exportVideo.play().then(function() {
-                    exportRecorder.start();
-                    renderFrameId = requestAnimationFrame(drawFrame);
-                }).catch(function(err) {
-                    fail('Export playback failed: ' + err.message);
+        // ---------- ffmpeg.wasm — optional MP4 conversion ----------
+        // The .webm download always works. MP4 conversion is opt-in: it loads
+        // ~32 MB of ffmpeg core on first use, transcodes VP9 → H.264 and
+        // Opus → AAC, then writes a Windows-friendly MP4 with the moov atom
+        // at the front. If anything fails the user still has the .webm.
+        let ffmpegPromise = null;
+        function loadFfmpeg() {
+            if (ffmpegPromise) return ffmpegPromise;
+            ffmpegPromise = (async function() {
+                const [ffmpegMod, utilMod] = await Promise.all([
+                    import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10'),
+                    import('https://esm.sh/@ffmpeg/util@0.12.1'),
+                ]);
+                const ffmpeg = new ffmpegMod.FFmpeg();
+                const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd';
+                await ffmpeg.load({
+                    coreURL: await utilMod.toBlobURL(baseURL + '/ffmpeg-core.js', 'text/javascript'),
+                    wasmURL: await utilMod.toBlobURL(baseURL + '/ffmpeg-core.wasm', 'application/wasm'),
                 });
-            }, { once: true });
-
-            exportVideo.addEventListener('error', function() {
-                fail('Export failed: could not load source video');
-            }, { once: true });
+                return ffmpeg;
+            })().catch(function(err) {
+                ffmpegPromise = null;
+                throw err;
+            });
+            return ffmpegPromise;
         }
 
-        // ---------- Editor wiring ----------
-        toolButtons.addEventListener('click', function(e) {
-            var btn = e.target.closest('button[data-tool]');
-            if (!btn) return;
-            var tool = btn.dataset.tool;
-            selectTool(selectedTool === tool ? null : tool);
-        });
+        async function downloadMp4() {
+            if (!recordedBlob) return;
+            ui.btnDlMp4.disabled = true;
+            ui.btnDlMp4.textContent = 'Loading ffmpeg…';
 
-        colorSwatches.addEventListener('click', function(e) {
-            var btn = e.target.closest('button[data-color]');
-            if (!btn) return;
-            selectColor(btn.dataset.color);
-        });
+            let progressListener = null;
+            try {
+                const ffmpeg = await loadFfmpeg();
 
-        durationSlider.addEventListener('input', function() {
-            defaultDuration = parseInt(durationSlider.value, 10);
-            durationValue.textContent = defaultDuration + 's';
-        });
+                ui.btnDlMp4.textContent = 'Converting… 0%';
+                progressListener = function(e) {
+                    const pct = Math.max(0, Math.min(100, Math.round((e.progress || 0) * 100)));
+                    ui.btnDlMp4.textContent = 'Converting… ' + pct + '%';
+                };
+                ffmpeg.on('progress', progressListener);
 
-        btnUndo.onclick = undoLastAnnotation;
-        btnClearAnn.onclick = clearAnnotations;
-        btnExportAnn.onclick = exportWithAnnotations;
+                const ab = await recordedBlob.arrayBuffer();
+                await ffmpeg.writeFile('in.webm', new Uint8Array(ab));
+                await ffmpeg.exec([
+                    '-i', 'in.webm',
+                    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
+                    '-c:a', 'aac', '-b:a', '192k',
+                    '-movflags', '+faststart',
+                    'out.mp4',
+                ]);
+                const data = await ffmpeg.readFile('out.mp4');
+                const blob = new Blob([data.buffer], { type: 'video/mp4' });
+                saveBlob(blob, timestampedName('mp4'));
 
-        annotationCanvas.addEventListener('pointerdown', onCanvasPointerDown);
-        annotationCanvas.addEventListener('pointermove', onCanvasPointerMove);
-        annotationCanvas.addEventListener('pointerup', onCanvasPointerUp);
-        annotationCanvas.addEventListener('pointercancel', onCanvasPointerUp);
+                try { await ffmpeg.deleteFile('in.webm'); } catch (_) {}
+                try { await ffmpeg.deleteFile('out.mp4'); } catch (_) {}
 
-        textEditorInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                commitTextAnnotation();
-            } else if (e.key === 'Escape') {
-                hideTextEditor();
+                ui.btnDlMp4.textContent = 'Downloaded';
+                setTimeout(function() {
+                    ui.btnDlMp4.textContent = 'Download .mp4';
+                    ui.btnDlMp4.disabled = false;
+                }, 2000);
+            } catch (err) {
+                console.error('MP4 conversion failed:', err);
+                showError('MP4 conversion failed: ' + (err && err.message ? err.message : 'unknown') + '. The .webm download still works.');
+                ui.btnDlMp4.textContent = 'Download .mp4';
+                ui.btnDlMp4.disabled = false;
+            } finally {
+                if (progressListener && ffmpegPromise) {
+                    try {
+                        const ffmpeg = await ffmpegPromise;
+                        ffmpeg.off('progress', progressListener);
+                    } catch (_) {}
+                }
             }
-        });
-
-        previewVideo.addEventListener('loadedmetadata', function() {
-            resizeAnnotationCanvas();
-            renderPreviewFrame();
-        });
-        previewVideo.addEventListener('timeupdate', renderPreviewFrame);
-        previewVideo.addEventListener('seeked', renderPreviewFrame);
-        previewVideo.addEventListener('play', startPreviewRenderLoop);
-        previewVideo.addEventListener('pause', stopPreviewRenderLoop);
-        previewVideo.addEventListener('ended', stopPreviewRenderLoop);
-
-        if (typeof ResizeObserver !== 'undefined') {
-            new ResizeObserver(function() {
-                resizeAnnotationCanvas();
-                renderPreviewFrame();
-            }).observe(previewVideo);
         }
-        window.addEventListener('resize', function() {
-            resizeAnnotationCanvas();
-            renderPreviewFrame();
-        });
+
+        // ---------- Wiring ----------
+        ui.btnStart.onclick = startRecording;
+        ui.btnStop.onclick = stopRecording;
+        ui.btnDlWebm.onclick = downloadWebm;
+        ui.btnDlMp4.onclick = downloadMp4;
     </script>
 </body>
 </html>
